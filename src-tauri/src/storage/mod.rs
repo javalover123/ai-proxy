@@ -17,6 +17,12 @@ pub(crate) trait DbTable {
 pub struct HeaderPair {
     pub key: String,
     pub value: String,
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 /// A collection of API requests organized in a tree structure.

@@ -95,6 +95,7 @@ export function ApiTreeItem({
       url: req.url,
       headers: headerMap,
       body: req.body || null,
+      bodyType: req.bodyType,
       params: req.params,
       cookies: req.cookies,
     })

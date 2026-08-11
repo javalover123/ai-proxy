@@ -374,7 +374,7 @@ export default function SettingsDialog({ open, onOpenChange, theme, onThemeChang
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             {t('settings.cancel')}
           </Button>
-          <Button onClick={handleSave} disabled={loading || saving}>
+          <Button variant="outline" onClick={handleSave} disabled={loading || saving}>
             {saving ? t('settings.saving') : t('settings.save')}
           </Button>
         </DialogFooter>

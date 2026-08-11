@@ -55,12 +55,8 @@
     "response": "Response",
     "responsePending": "尚未收到响应",
     "noHeaders": "无请求头",
-    "noBody": "无正文",
-    "noRequestBody": "未捕获请求正文",
     "query": "Query",
-    "noQuery": "无 Query 参数",
     "cookies": "Cookies",
-    "noCookies": "无 Cookie 数据",
     "noFormData": "无表单数据",
     "formData": "Form-Data",
     "copyUri": "复制 URI",
@@ -78,6 +74,8 @@
     "noConsole": "控制台无输出",
     "decryptPrompt": "此请求未解密，无法查看响应内容。",
     "decryptAction": "启用 SSL 解密",
+    "decryptSuccess": "已为 {domain} 启用 SSL 解密，新请求将可解密查看。",
+    "copyForAi": "复制给 AI",
     "decryptSuccess": "已为 {domain} 启用 SSL 解密，新请求将自动解密。"
   },
   "settings": {
@@ -283,7 +281,15 @@
     "token": "Token",
     "bodyFormatJson": "JSON",
     "bodyFormatXml": "XML",
-    "bodyFormatText": "Text"
+    "bodyFormatText": "Text",
+    "bodyTabRaw": "Raw",
+    "bodyTabNoneHint": "此请求不包含请求体",
+    "bodyTabUrlEncoded": "x-www-form-urlencoded",
+    "bodyTabFormData": "form-data",
+    "bodyFormDataAddField": "添加字段",
+    "bodyFormDataTypeText": "文本",
+    "bodyFormDataTypeFile": "文件",
+    "bodyUrlEncodedAddField": "添加字段"
   },
   "tab": {
     "untitled": "未命名请求",

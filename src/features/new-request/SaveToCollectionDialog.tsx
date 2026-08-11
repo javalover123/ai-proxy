@@ -201,7 +201,7 @@ export function SaveToCollectionDialog({
           <Button variant="outline" onClick={() => handleOpenChange(false)}>
             {t('settings.cancel')}
           </Button>
-          <Button onClick={handleConfirm} disabled={selectedId == null}>
+          <Button variant="outline" onClick={handleConfirm} disabled={selectedId == null}>
             {t('settings.save')}
           </Button>
         </DialogFooter>

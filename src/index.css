@@ -82,7 +82,6 @@
   --popover-foreground: oklch(0.145 0 0);
   --primary: oklch(0.922 0 0);
   --primary-foreground: oklch(0.21 0 0);
-  --primary-border: oklch(0.82 0 0);
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);
@@ -145,7 +144,6 @@
   --popover-foreground: oklch(0.985 0 0);
   --primary: oklch(0.205 0 0);
   --primary-foreground: oklch(0.985 0 0);
-  --primary-border: oklch(1 0 0 / 18%);
   --secondary: oklch(0.28 0 0);
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.28 0 0);
@@ -245,31 +243,16 @@
 }
 
 @layer components {
-  [data-slot='button'][data-variant='default'] {
-    border-color: var(--primary-border);
+  /* 全局 Switch 选中色保持 AI 蓝色，与项目品牌视觉一致 */
+  [data-slot='switch'][data-checked] {
+    background-color: var(--ai-user-bubble);
+    border-color: var(--ai-user-bubble);
+  }
+  .dark [data-slot='switch'][data-checked] {
+    background-color: var(--ai-user-bubble);
+    border-color: var(--ai-user-bubble);
   }
   /* 全局 badge 颜色变量仍保留在 :root/.dark 中以支持 Badge 内联 style 引用 */
-}
-
-/* 弹窗底部按钮统一：保存/确认（default 变体）采用与取消（outline 变体）相同的配色。
-   刻意写成「无 layer」规则——Tailwind v4 里 utilities layer 晚于 components，
-   放进 @layer 会被 bg-primary 等工具类覆盖；无 layer 声明优先级高于所有 @layer。
-   所有使用 DialogFooter 的弹窗自动生效，明暗主题各自对齐 outline 的定义。 */
-[data-slot='dialog-footer'] [data-slot='button'][data-variant='default'] {
-  background-color: var(--background);
-  color: var(--foreground);
-  border-color: var(--border);
-}
-[data-slot='dialog-footer'] [data-slot='button'][data-variant='default']:hover {
-  background-color: var(--muted);
-  color: var(--foreground);
-}
-.dark [data-slot='dialog-footer'] [data-slot='button'][data-variant='default'] {
-  border-color: var(--input);
-  background-color: color-mix(in oklch, var(--input) 30%, transparent);
-}
-.dark [data-slot='dialog-footer'] [data-slot='button'][data-variant='default']:hover {
-  background-color: color-mix(in oklch, var(--input) 50%, transparent);
 }
 
 /* Tooltip 箭头统一隐藏：ui/tooltip.tsx 的 Arrow 颜色硬编码为 bg-foreground（暗色下近白），

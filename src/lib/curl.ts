@@ -1,5 +1,8 @@
 // src/lib/curl.ts — cURL 解析与生成
 
+import type { BodyType } from '@/types/collection'
+import { parseUrlEncoded, parseFormDataBody } from '@/lib/body-utils'
+
 // ---------------------------------------------------------------------------
 // 类型定义
 // ---------------------------------------------------------------------------
@@ -217,6 +220,7 @@ export interface FormatCurlOptions {
   url: string
   headers: Record<string, string>
   body?: string | null
+  bodyType?: BodyType
   params?: { key: string; value: string }[]
   cookies?: { key: string; value: string }[]
 }
@@ -235,7 +239,7 @@ export function formatCurl(opts: FormatCurlOptions): string {
   // 拼接 params 到 URL
   let url = opts.url
   if (opts.params && opts.params.length > 0) {
-    const filled = opts.params.filter(p => p.key.trim())
+    const filled = opts.params.filter(p => p.enabled !== false && p.key.trim())
     if (filled.length > 0) {
       const sep = url.includes('?') ? '&' : '?'
       const qs = filled
@@ -248,7 +252,7 @@ export function formatCurl(opts: FormatCurlOptions): string {
   // 合并 headers（cookies 追加为 Cookie header）
   const mergedHeaders = { ...opts.headers }
   if (opts.cookies && opts.cookies.length > 0) {
-    const filled = opts.cookies.filter(c => c.key.trim())
+    const filled = opts.cookies.filter(c => c.enabled !== false && c.key.trim())
     if (filled.length > 0) {
       const cookieStr = filled.map(c => `${c.key.trim()}=${c.value}`).join('; ')
       mergedHeaders['Cookie'] = cookieStr
@@ -262,10 +266,30 @@ export function formatCurl(opts: FormatCurlOptions): string {
     lines.push(`  --header ${sq(`${k}: ${v}`)}`)
   }
 
-  // GET/HEAD/OPTIONS 不输出 body
+  // GET/HEAD/OPTIONS 不输出 body；none 类型也不输出 body
   const noBodyMethods = new Set(['GET', 'HEAD', 'OPTIONS'])
-  if (opts.body && !noBodyMethods.has(opts.method.toUpperCase())) {
-    lines.push(`  --data-raw ${sq(opts.body)}`)
+  if (opts.body && opts.bodyType !== 'none' && !noBodyMethods.has(opts.method.toUpperCase())) {
+    if (opts.bodyType === 'urlencoded') {
+      // 解析 body 为 key=value&...，每个条目输出 --data-urlencode
+      const entries = parseUrlEncoded(opts.body)
+      const filled = entries.filter(e => e.enabled !== false && e.key.trim())
+      for (const entry of filled) {
+        lines.push(`  --data-urlencode ${sq(`${entry.key.trim()}=${entry.value}`)}`)
+      }
+    } else if (opts.bodyType === 'multipart') {
+      // 解析 body JSON，text → --form key=value，file → --form key=@path
+      const entries = parseFormDataBody(opts.body)
+      const filled = entries.filter(e => e.enabled !== false && e.key.trim())
+      for (const entry of filled) {
+        if (entry.type === 'file') {
+          lines.push(`  --form ${sq(`${entry.key.trim()}=@${entry.value}`)}`)
+        } else {
+          lines.push(`  --form ${sq(`${entry.key.trim()}=${entry.value}`)}`)
+        }
+      }
+    } else {
+      lines.push(`  --data-raw ${sq(opts.body)}`)
+    }
   }
 
   return lines.join(' \\\n')

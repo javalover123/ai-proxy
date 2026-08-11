@@ -4,6 +4,7 @@ import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { buildFullUrl } from '@/lib/http-constants'
 import RequestSendPanel from '@/features/new-request/RequestSendPanel'
 import { usePanelRef } from 'react-resizable-panels'
+import { buildSendBody } from '@/lib/body-utils'
 import type { TrafficEntry } from '@/types/proxy'
 import type { HttpMethod, KeyValuePair, BodyType } from '@/types/collection'
 
@@ -52,7 +53,7 @@ export default function EditRequestDialog({
             const lk = k.toLowerCase()
             return lk !== 'host' && lk !== 'content-length' && lk !== 'transfer-encoding'
           })
-          .map(([key, value]) => ({ key, value }))
+          .map(([key, value]) => ({ key, value, enabled: true }))
       )
       setCookies([])
       setBody(entry.requestBody ?? '')
@@ -83,8 +84,8 @@ export default function EditRequestDialog({
     setError('')
 
     const headerMap: Record<string, string> = {}
-    for (const { key, value } of headers) {
-      if (key.trim()) headerMap[key.trim()] = value
+    for (const { key, value, enabled } of headers) {
+      if (enabled !== false && key.trim()) headerMap[key.trim()] = value
     }
 
     const controller = new AbortController()
@@ -95,7 +96,7 @@ export default function EditRequestDialog({
         method,
         url: url.trim(),
         headers: headerMap,
-        body: body || null,
+        body: buildSendBody(bodyType, body),
       })
       if (controller.signal.aborted) return
       setResponseEntryId(entryId)

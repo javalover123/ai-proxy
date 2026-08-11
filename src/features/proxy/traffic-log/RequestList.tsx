@@ -11,7 +11,7 @@ import {
   ContextMenuTrigger,
 } from '@/components/ui/context-menu'
 import { GripDots } from '@/components/icons'
-import { Empty, EmptyTitle } from '@/components/ui/empty'
+import { Empty, EmptyTitle } from '@/components/core/Empty'
 import { Badge } from '@/components/ui/badge'
 import type { TrafficEntry } from '@/types/proxy'
 import { statusCategory, formatDuration, formatTime, formatCurl } from '@/lib/format'

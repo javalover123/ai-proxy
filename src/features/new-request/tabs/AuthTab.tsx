@@ -47,15 +47,15 @@ export default function AuthTab({ headers, onHeadersChange }: Props) {
     if (type === 'none') {
       onHeadersChange(rest)
     } else if (type === 'basic') {
-      onHeadersChange([...rest, { key: 'Authorization', value: 'Basic ' }])
+      onHeadersChange([...rest, { key: 'Authorization', value: 'Basic ', enabled: true }])
     } else {
-      onHeadersChange([...rest, { key: 'Authorization', value: 'Bearer ' }])
+      onHeadersChange([...rest, { key: 'Authorization', value: 'Bearer ', enabled: true }])
     }
   }
 
   const setAuthValue = (prefix: string, val: string) => {
     const rest = removeAuthHeader(headers)
-    onHeadersChange([...rest, { key: 'Authorization', value: `${prefix}${val}` }])
+    onHeadersChange([...rest, { key: 'Authorization', value: `${prefix}${val}`, enabled: true }])
   }
 
   return (

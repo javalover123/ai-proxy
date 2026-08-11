@@ -18,10 +18,10 @@ function snapshot(tab: RequestTab): RequestTabSavedData {
 }
 
 /** Deep-compare two KeyValuePair arrays */
-function kvEqual(a: { key: string; value: string }[], b: { key: string; value: string }[]): boolean {
+function kvEqual(a: { key: string; value: string; enabled?: boolean }[], b: { key: string; value: string; enabled?: boolean }[]): boolean {
   if (a.length !== b.length) return false
   for (let i = 0; i < a.length; i++) {
-    if (a[i].key !== b[i].key || a[i].value !== b[i].value) return false
+    if (a[i].key !== b[i].key || a[i].value !== b[i].value || (a[i].enabled !== false) !== (b[i].enabled !== false)) return false
   }
   return true
 }

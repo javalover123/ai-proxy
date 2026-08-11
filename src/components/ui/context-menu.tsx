@@ -89,7 +89,7 @@ function ContextMenuItem({
   inset,
   variant = "default",
   ...props
-}: React.ComponentProps<typeof ContextMenuPrimitive.Item> & {
+}: ContextMenuPrimitive.Item.Props & {
   inset?: boolean
   variant?: "default" | "destructive"
 }) {

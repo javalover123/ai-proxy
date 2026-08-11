@@ -2,11 +2,33 @@
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS'
 
-export type BodyType = 'auto' | 'json' | 'xml' | 'text' | 'urlencoded' | 'multipart'
+export type BodyType = 'none' | 'auto' | 'json' | 'xml' | 'text' | 'urlencoded' | 'multipart'
+
+// ── IPC body：发送给后端的结构化请求体 ─────────────────────────────────────
+
+/**
+ * 发送请求时的 body 参数（tagged union）。
+ * 用 `mode` 做 discriminator，不同类型携带不同的字段，
+ * 消除旧设计中游离的 `bodyType: string` 参数。
+ */
+export type RequestBody =
+  | { mode: 'raw';  content: string;  language?: 'json' | 'xml' | 'text' | 'urlencoded' }
+  | { mode: 'formdata'; parts: FormDataPart[] }
+  | null
+
+// FormDataPart 仅用于 IPC 的 multipart/form-data 传参
+export interface FormDataPart {
+  key: string
+  value: string
+  partType: 'text' | 'file'
+}
 
 export interface KeyValuePair {
   key: string
   value: string
+  /** Whether this entry is enabled for transmission (default true). Disabled entries are kept in
+   *  the editor but excluded from send/save/curl export. */
+  enabled?: boolean
 }
 
 export interface ApiCollection {

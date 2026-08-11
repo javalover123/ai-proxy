@@ -1,17 +1,17 @@
 import { PlusIcon, Trash2Icon } from 'lucide-react'
 import { Input } from '@/components/ui/input'
-import { Empty, EmptyTitle } from '@/components/ui/empty'
+import { Empty, EmptyTitle } from '@/components/core/Empty'
+import { Checkbox } from '@/components/ui/checkbox'
 import type { KeyValuePair } from '@/types/collection'
 
 interface KeyValueEditorProps {
   entries: KeyValuePair[]
   onChange: (entries: KeyValuePair[]) => void
-  title: string
   addLabel: string
   emptyLabel: string
 }
 
-export function KeyValueEditor({ entries, onChange, title, addLabel, emptyLabel }: KeyValueEditorProps) {
+export function KeyValueEditor({ entries, onChange, addLabel, emptyLabel }: KeyValueEditorProps) {
   const handleChange = (i: number, field: 'key' | 'value', val: string) => {
     onChange(entries.map((e, idx) => idx === i ? { ...e, [field]: val } : e))
   }
@@ -20,16 +20,17 @@ export function KeyValueEditor({ entries, onChange, title, addLabel, emptyLabel 
     onChange(entries.filter((_, idx) => idx !== i))
   }
 
+  const handleToggle = (i: number) => {
+    onChange(entries.map((e, idx) => idx === i ? { ...e, enabled: e.enabled === false } : e))
+  }
+
   const handleAdd = () => {
-    onChange([...entries, { key: '', value: '' }])
+    onChange([...entries, { key: '', value: '', enabled: true }])
   }
 
   return (
-    <div className="p-4 space-y-1 min-h-0 flex flex-col">
-      <div className="flex items-center justify-between mb-1.5">
-        <span className="text-ui-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          {title}
-        </span>
+    <div className="px-2 py-1 space-y-1 min-h-0 flex flex-col">
+      <div className="flex justify-end mb-1.5">
         <button
           onClick={handleAdd}
           className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
@@ -46,6 +47,10 @@ export function KeyValueEditor({ entries, onChange, title, addLabel, emptyLabel 
         <div className="space-y-1">
           {entries.map((pair, i) => (
             <div key={i} className="flex gap-1 items-center">
+              <Checkbox
+                checked={pair.enabled !== false}
+                onCheckedChange={() => handleToggle(i)}
+              />
               <Input
                 value={pair.key}
                 onChange={e => handleChange(i, 'key', e.target.value)}

@@ -64,7 +64,7 @@ export function CurlImportDialog({ open, onOpenChange, onConfirm }: CurlImportDi
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             {t('settings.cancel')}
           </Button>
-          <Button onClick={handleConfirm} disabled={!value.trim()}>
+          <Button variant="outline" onClick={handleConfirm} disabled={!value.trim()}>
             {t('collection.importCurl')}
           </Button>
         </DialogFooter>

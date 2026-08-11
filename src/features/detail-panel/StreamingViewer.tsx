@@ -4,7 +4,7 @@ import { ChevronRight, ChevronDown, ListChecks } from 'lucide-react'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { CopyButton } from '@/components/core/CopyButton'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
-import { Empty, EmptyTitle } from '@/components/ui/empty'
+import { Empty, EmptyTitle } from '@/components/core/Empty'
 import type { TrafficEntry } from '@/types/proxy'
 import { parseSse, isStreamingContentType, mergeSseMessages, estimateTokens, extractTokenUsage, type SseEvent, type MergeFormat, type MergeResult, type TokenUsage } from '@/lib/sse'
 

@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { ChevronRight, ChevronDown, WrenchIcon, FileTextIcon, ExternalLinkIcon, CodeIcon, TextIcon, BrainIcon } from 'lucide-react'
 import { type AiTurn, type AiContentBlock } from '@/types/ai'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
-import { isLikelyMarkdown } from '@/lib/markdown'
+import { isLikelyMarkdown, isJsonObject } from '@/lib/markdown'
 import { MarkdownContent } from '@/components/markdown/MarkdownContent'
 import { CopyButton } from '@/components/core/CopyButton'
 
@@ -42,12 +42,44 @@ interface ConversationBubbleProps {
   defaultView?: 'md' | 'raw'
 }
 
-/** 顶层 text block：检测命中且当前视图为 md 时走 Markdown 渲染 */
+/** 顶层 text block：检测命中且当前视图为 md 时走 Markdown 渲染；
+ *  JSON 对象/数组自动美化，md 模式走语法高亮代码块，raw 模式走 <pre>。 */
 function TextBlock({ text, showMd, inverted }: { text: string; showMd: boolean; inverted: boolean }) {
   const isMd = useMemo(() => isLikelyMarkdown(text), [text])
+
+  // JSON 检测：仅对象/数组命中，且 >= 8 字符（排除 {}、[] 等无意义空对象）
+  const formattedJson = useMemo(() => {
+    const s = text.trim()
+    if (s.length < 8) return null
+    if (s[0] !== '{' && s[0] !== '[') return null
+    try {
+      const parsed = JSON.parse(s)
+      if (typeof parsed === 'object' && parsed !== null) {
+        return JSON.stringify(parsed, null, 2)
+      }
+    } catch {}
+    return null
+  }, [text])
+
   if (showMd && isMd) {
     return <MarkdownContent text={text} variant={inverted ? 'inverted' : 'default'} />
   }
+
+  if (formattedJson) {
+    if (showMd) {
+      // 包裹为 fenced code block，复用 Streamdown Shiki 语法高亮
+      const fence = formattedJson.includes('```') ? '````' : '```'
+      return (
+        <MarkdownContent
+          text={`${fence}json\n${formattedJson}\n${fence}`}
+          variant={inverted ? 'inverted' : 'default'}
+        />
+      )
+    }
+    // raw 模式：美化后的纯文本
+    return <pre className="whitespace-pre-wrap break-words font-mono text-prose-sm">{formattedJson}</pre>
+  }
+
   return <span>{text}</span>
 }
 
@@ -186,7 +218,7 @@ export function ConversationBubble({ turn, isStreaming, reqLabel, onJump, defaul
   const mdCapable = useMemo(() => {
     const check = (blocks: AiContentBlock[]): boolean =>
       blocks.some((b) => {
-        if (b.type === 'text') return isLikelyMarkdown(b.text)
+        if (b.type === 'text') return isLikelyMarkdown(b.text) || isJsonObject(b.text)
         if (b.type === 'tool_result') return check(b.content)
         return false
       })

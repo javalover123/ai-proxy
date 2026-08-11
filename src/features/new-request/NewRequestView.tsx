@@ -19,6 +19,7 @@ import type { CurlParsedResultOk } from '@/lib/curl'
 import type { ApiRequestNode, KeyValuePair } from '@/types/collection'
 import type { TrafficEntry } from '@/types/proxy'
 import type { DetailPosition } from '@/features/bottom-bar'
+import { buildSendBody } from '@/lib/body-utils'
 
 interface NewRequestViewProps {
   onSendSuccess: (entryId: number) => void
@@ -32,7 +33,7 @@ interface NewRequestViewProps {
 const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'] as const
 
 function serializeCookies(cookies: KeyValuePair[]): string | null {
-  const filled = cookies.filter(c => c.key.trim())
+  const filled = cookies.filter(c => c.enabled !== false && c.key.trim())
   if (filled.length === 0) return null
   return filled.map(c => `${c.key.trim()}=${c.value}`).join('; ')
 }
@@ -118,8 +119,8 @@ export function NewRequestView({ onSendSuccess, entries, showSidebar, detailPosi
     updateActiveTab({ sending: true, error: '' }, sendingTabId)
 
     const headerMap: Record<string, string> = {}
-    for (const { key, value } of activeTab.headers) {
-      if (key.trim()) headerMap[key.trim()] = value
+    for (const { key, value, enabled } of activeTab.headers) {
+      if (enabled !== false && key.trim()) headerMap[key.trim()] = value
     }
 
     const cookieStr = serializeCookies(activeTab.cookies)
@@ -127,7 +128,7 @@ export function NewRequestView({ onSendSuccess, entries, showSidebar, detailPosi
       headerMap['Cookie'] = cookieStr
     }
 
-    const filledParams = activeTab.params.filter(p => p.key.trim())
+    const filledParams = activeTab.params.filter(p => p.enabled !== false && p.key.trim())
     let finalUrl = activeTab.url.trim()
     if (filledParams.length > 0) {
       const sep = finalUrl.includes('?') ? '&' : '?'
@@ -146,7 +147,7 @@ export function NewRequestView({ onSendSuccess, entries, showSidebar, detailPosi
         method: activeTab.method,
         url: finalUrl,
         headers: headerMap,
-        body: activeTab.body || null,
+        body: buildSendBody(activeTab.bodyType, activeTab.body),
       })
       // Ignore result if cancelled
       if (cancelRef.current?.signal.aborted) return
@@ -200,9 +201,9 @@ export function NewRequestView({ onSendSuccess, entries, showSidebar, detailPosi
       updateRequest(activeTab.linkedNodeId, {
         method: activeTab.method,
         url: activeTab.url,
-        params: activeTab.params.filter(p => p.key.trim()),
-        headers: activeTab.headers.filter(h => h.key.trim()),
-        cookies: activeTab.cookies.filter(c => c.key.trim()),
+        params: activeTab.params.filter(p => p.enabled !== false && p.key.trim()),
+        headers: activeTab.headers.filter(h => h.enabled !== false && h.key.trim()),
+        cookies: activeTab.cookies.filter(c => c.enabled !== false && c.key.trim()),
         bodyType: activeTab.bodyType,
         body: activeTab.body,
       })
@@ -244,7 +245,7 @@ export function NewRequestView({ onSendSuccess, entries, showSidebar, detailPosi
 
   // cURL 导入弹窗确认：创建 dirty tab（不自动保存）
   const handleImportCurl = useCallback((result: CurlParsedResultOk) => {
-    const headerPairs: KeyValuePair[] = Object.entries(result.headers).map(([k, v]) => ({ key: k, value: v }))
+    const headerPairs: KeyValuePair[] = Object.entries(result.headers).map(([k, v]) => ({ key: k, value: v, enabled: true }))
 
     // 从 URL 中提取 query params
     const params: KeyValuePair[] = []
@@ -256,7 +257,7 @@ export function NewRequestView({ onSendSuccess, entries, showSidebar, detailPosi
       for (const pair of qs.split('&')) {
         const eqIdx = pair.indexOf('=')
         if (eqIdx > 0) {
-          params.push({ key: decodeURIComponent(pair.substring(0, eqIdx)), value: decodeURIComponent(pair.substring(eqIdx + 1)) })
+          params.push({ key: decodeURIComponent(pair.substring(0, eqIdx)), value: decodeURIComponent(pair.substring(eqIdx + 1)), enabled: true })
         }
       }
     }
@@ -306,9 +307,9 @@ export function NewRequestView({ onSendSuccess, entries, showSidebar, detailPosi
       }
 
       linkTabToNode(tabId, newNode)
-      const headers = activeTab.headers.filter(h => h.key.trim())
-      const params = activeTab.params.filter(p => p.key.trim())
-      const cookies = activeTab.cookies.filter(c => c.key.trim())
+      const headers = activeTab.headers.filter(h => h.enabled !== false && h.key.trim())
+      const params = activeTab.params.filter(p => p.enabled !== false && p.key.trim())
+      const cookies = activeTab.cookies.filter(c => c.enabled !== false && c.key.trim())
       // Direct DB write using requestId (not through updateRequest which needs existing tree node)
       invoke('save_request', {
         id: newRequestId,
@@ -474,6 +475,7 @@ export function NewRequestView({ onSendSuccess, entries, showSidebar, detailPosi
             {/* 活跃 tab 内容（仅挂载 active tab） */}
             {activeTab && (
               <RequestSendPanel
+                key={activeTab.id}
                 panelGroupId={`new-request-${activeTab.id}-${detailPosition}`}
                 method={activeTab.method as typeof METHODS[number]}
                 onMethodChange={v => updateActiveTab({ method: v })}
@@ -549,7 +551,7 @@ export function NewRequestView({ onSendSuccess, entries, showSidebar, detailPosi
           <Button variant="outline" onClick={() => setCloseConfirmOpen(false)}>
             {t('settings.cancel')}
           </Button>
-          <Button onClick={handleSaveAndClose}>
+          <Button variant="outline" onClick={handleSaveAndClose}>
             {t('tab.saveClose')}
           </Button>
         </DialogFooter>

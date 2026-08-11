@@ -4,7 +4,7 @@ import type { ApiCollection, ApiRequestNode, ApiTreeNode } from '@/types/collect
 import { useLocale } from '@/hooks/useLocale'
 import { ApiTreeItem } from './ApiTreeItem'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Empty, EmptyTitle } from '@/components/ui/empty'
+import { Empty, EmptyTitle } from '@/components/core/Empty'
 
 /** Find all ancestor IDs for a node in the tree. */
 function findAncestorIds(collections: ApiCollection[], targetId: number): number[] {

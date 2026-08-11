@@ -55,12 +55,8 @@
     "response": "Response",
     "responsePending": "Response not yet received",
     "noHeaders": "No headers",
-    "noBody": "No body",
-    "noRequestBody": "Request body not captured",
     "query": "Query",
-    "noQuery": "No query parameters",
     "cookies": "Cookies",
-    "noCookies": "No cookie data",
     "noFormData": "No form data",
     "formData": "Form-Data",
     "copyUri": "Copy URI",
@@ -78,6 +74,8 @@
     "noConsole": "No console output",
     "decryptPrompt": "Response was not decrypted — content cannot be viewed.",
     "decryptAction": "Enable SSL",
+    "decryptSuccess": "SSL decryption enabled for {domain} – new requests will be decrypted.",
+    "copyForAi": "Copy for AI",
     "decryptSuccess": "SSL decryption enabled for {domain} – new requests will be decrypted."
   },
   "settings": {
@@ -283,7 +281,15 @@
     "token": "Token",
     "bodyFormatJson": "JSON",
     "bodyFormatXml": "XML",
-    "bodyFormatText": "Text"
+    "bodyFormatText": "Text",
+    "bodyTabRaw": "Raw",
+    "bodyTabNoneHint": "This request has no body",
+    "bodyTabUrlEncoded": "x-www-form-urlencoded",
+    "bodyTabFormData": "form-data",
+    "bodyFormDataAddField": "Add field",
+    "bodyFormDataTypeText": "Text",
+    "bodyFormDataTypeFile": "File",
+    "bodyUrlEncodedAddField": "Add field"
   },
   "tab": {
     "untitled": "Untitled Request",

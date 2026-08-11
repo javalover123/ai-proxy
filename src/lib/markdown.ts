@@ -26,3 +26,23 @@ export function isLikelyMarkdown(text: string): boolean {
   if (text.includes('|') && TABLE_SEP_RE.test(text)) return true
   return false
 }
+
+/**
+ * 检测文本是否为 JSON 对象或数组（非 primitive）。
+ * 仅对 Object/Array 返回 true，排除 string/number/boolean/null 等 JSON primitive，
+ * 避免将普通文本误判为 JSON。
+ * 快速 reject 路径：不足 8 字符（{}、[] 无意义）或非 {/[ 开头。
+ */
+export function isJsonObject(text: string): boolean {
+  if (!text) return false
+  const s = text.trim()
+  if (s.length < 8) return false
+  const first = s[0]
+  if (first !== '{' && first !== '[') return false
+  try {
+    const parsed = JSON.parse(s)
+    return typeof parsed === 'object' && parsed !== null
+  } catch {
+    return false
+  }
+}

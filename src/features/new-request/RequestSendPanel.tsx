@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { SendIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group'
+import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/core/InputGroup'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { useLocale } from '@/hooks/useLocale'
@@ -177,7 +177,7 @@ export default function RequestSendPanel({
             minSize={hasResponse ? "15%" : "100%"}
             maxSize={hasResponse ? "85%" : "100%"}
           >
-            <div className="h-full min-h-0 overflow-hidden">{editor}</div>
+            <div className="flex flex-col h-full min-h-0 overflow-hidden">{editor}</div>
           </ResizablePanel>
           {hasResponse && (
             <>

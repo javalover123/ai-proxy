@@ -224,12 +224,17 @@ export function useAiSessions() {
         let p = 0
         const max = Math.min(result.length, turns.length)
         while (p < max && sameTurn(result[p].turn, turns[p])) p++
-        // internableTurn 优化：前缀匹配时优先复用已存引用（省内存，非去重依赖）
+        // 增量更新：已存在的索引位原地替换（处理流式同一 turn 内容变化）；
+        // 新索引位追加。避免 push-only 导致的同 turn 多版本残留。
         for (let i = p; i < turns.length; i++) {
-          const turn = i < result.length && internableTurn(result[i].turn, turns[i])
-            ? result[i].turn
-            : turns[i]
-          result.push({ turn, requestId: rid })
+          if (i < result.length) {
+            // internableTurn 为 true → 复用旧引用（省内存），否则用新内容+新 requestId
+            if (!internableTurn(result[i].turn, turns[i])) {
+              result[i] = { turn: turns[i], requestId: rid }
+            }
+          } else {
+            result.push({ turn: turns[i], requestId: rid })
+          }
         }
       }
       return result

@@ -3,6 +3,7 @@ import { invoke } from '@tauri-apps/api/core'
 import type { TrafficEntry, ProxyJumpTarget } from '@/types/proxy'
 import { extractHost, classifyEntry, type TypeFilter } from '@/lib/format'
 import { buildFullUrl } from '@/lib/http-constants'
+import { buildSendBody } from '@/lib/body-utils'
 import DomainSidebar from './DomainSidebar'
 import RequestList from './RequestList'
 import type { SortOrder, SortColumn } from './RequestList'
@@ -191,7 +192,9 @@ export default function TrafficLog({ entries, showSidebar, detailPosition, onAut
         method: entry.method,
         url: buildFullUrl(entry),
         headers,
-        body: entry.requestBody,
+        body: entry.requestBody
+          ? { mode: 'raw', content: entry.requestBody }
+          : null,
       })
       // 清域名过滤保证新条目在列表中可见，选中并滚动到目标行
       setSelectedDomain(null)

@@ -427,7 +427,7 @@ export default function ScriptConfigDialog({ open, onOpenChange, onEditScript }:
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             {t('scriptConfig.cancel')}
           </Button>
-          <Button onClick={handleSave} disabled={loading || saving}>
+          <Button variant="outline" onClick={handleSave} disabled={loading || saving}>
             {saving ? t('scriptConfig.saving') : t('scriptConfig.save')}
           </Button>
         </DialogFooter>

@@ -474,7 +474,7 @@ export default function AiConfigDialog({ open, onOpenChange }: Props) {
             <Button variant="outline" onClick={() => onOpenChange(false)}>
               {t('aiConfig.cancel')}
               </Button>
-              <Button onClick={handleSave} disabled={loading || saving}>
+              <Button variant="outline" onClick={handleSave} disabled={loading || saving}>
                 {saving ? t('aiConfig.saving') : t('aiConfig.save')}
               </Button>
             </DialogFooter>

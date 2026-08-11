@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { TrafficEntry } from '@/types/proxy'
 import SidePanel, { type PanelTab, type TabDef } from './components/SidePanel'
@@ -6,7 +6,7 @@ import KeyValueTable from './components/KeyValueTable'
 import BodyView from './components/BodyView'
 import RawView from './components/RawView'
 import FormDataView from './FormDataView'
-import { Empty, EmptyTitle } from '@/components/ui/empty'
+import { Empty, EmptyTitle } from '@/components/core/Empty'
 
 interface Props {
   entry: TrafficEntry | undefined
@@ -59,6 +59,36 @@ export default function RequestPanel({ entry, onTitleClick }: Props) {
   const tabs = buildTabs(hasQuery)
   const [tab, setTab] = useState<PanelTab>('body')
 
+  const tabCounts = useMemo(() => {
+    if (!entry) return {}
+    const counts: Partial<Record<PanelTab, number | null>> = {}
+
+    // headers
+    counts.header = Object.keys(entry.requestHeaders).length
+
+    // query
+    if (entry.requestQuery) {
+      counts.query = Object.keys(entry.requestQuery).length
+    }
+
+    // cookies
+    const cookies = parseCookies(entry.requestHeaders)
+    counts.cookies = Object.keys(cookies).length
+
+    // form data
+    const formCt = entry.requestHeaders['content-type'] ?? entry.requestHeaders['Content-Type'] ?? ''
+    counts.form = (entry.requestBody && formCt.includes('form')) ? 1 : 0
+
+    // body
+    counts.body = entry.requestBody ? 1 : 0
+
+    // raw
+    const raw = formatRequestRaw(entry)
+    counts.raw = raw ? 1 : 0
+
+    return counts
+  }, [entry])
+
   // 切换条目时回退到 body
   useEffect(() => {
     setTab('body')
@@ -71,7 +101,8 @@ export default function RequestPanel({ entry, onTitleClick }: Props) {
       onTabChange={setTab}
       tabs={tabs}
       bodySize={entry?.requestBody?.length}
-      onTitleClick={onTitleClick}>
+      onTitleClick={onTitleClick}
+      tabCounts={tabCounts}>
       <RequestPanelContent tab={tab} entry={entry} t={t} />
     </SidePanel>
   )
@@ -91,12 +122,12 @@ function RequestPanelContent({ tab, entry, t }: { tab: PanelTab; entry: TrafficE
 
   if (tab === 'query') {
     const queryData = entry.requestQuery ?? {}
-    return <KeyValueTable data={queryData} emptyLabel={t('detail.noQuery')} />
+    return <KeyValueTable data={queryData} emptyLabel="" />
   }
 
   if (tab === 'cookies') {
     const cookies = parseCookies(entry.requestHeaders)
-    return <KeyValueTable data={cookies} emptyLabel={t('detail.noCookies')} />
+    return <KeyValueTable data={cookies} emptyLabel="" />
   }
 
   if (tab === 'form') {
@@ -108,7 +139,7 @@ function RequestPanelContent({ tab, entry, t }: { tab: PanelTab; entry: TrafficE
     return entry.requestBody ? (
       <BodyView body={entry.requestBody} contentType={entry.requestContentType} />
     ) : (
-      <Empty><EmptyTitle>{t('detail.noRequestBody')}</EmptyTitle></Empty>
+      <Empty />
     )
   }
 

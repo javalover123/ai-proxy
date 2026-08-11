@@ -7,12 +7,15 @@ import type { TrafficEntry } from '@/types/proxy'
 import type { SslConfig } from '@/types/settings'
 import { extractHost } from '@/lib/format'
 import { isStreamingContentType } from '@/lib/sse'
+import { formatTrafficForAi } from '@/lib/format-for-ai'
+import { CopyButton } from '@/components/core/CopyButton'
+import { useLocale } from '@/hooks/useLocale'
 import SidePanel, { type PanelTab, type TabDef } from './components/SidePanel'
 import KeyValueTable from './components/KeyValueTable'
 import BodyView from './components/BodyView'
 import RawView from './components/RawView'
 import StreamingViewer from './StreamingViewer'
-import { Empty, EmptyTitle } from '@/components/ui/empty'
+import { Empty, EmptyTitle } from '@/components/core/Empty'
 
 interface Props {
   entry: TrafficEntry | undefined
@@ -103,6 +106,7 @@ function formatResponseRaw(entry: TrafficEntry): string {
 
 export default function ResponsePanel({ entry, onTitleClick }: Props) {
   const { t } = useTranslation()
+  const { locale } = useLocale()
   const [tab, setTab] = useState<PanelTab>('body')
 
   // 切换条目时回退到 body
@@ -116,7 +120,6 @@ export default function ResponsePanel({ entry, onTitleClick }: Props) {
         { id: 'header', labelKey: 'detail.headers' },
         { id: 'body', labelKey: 'detail.body' },
         { id: 'raw', labelKey: 'detail.raw' },
-        { id: 'console', labelKey: 'detail.console' },
       ]
     }
     const hasStream = (entry.responseChunks?.length ?? 0) > 1 || isStreamingContentType(entry.responseHeaders)
@@ -144,6 +147,34 @@ export default function ResponsePanel({ entry, onTitleClick }: Props) {
     }
   }, [entry, tab])
 
+  const copyForAiText = useMemo(() => {
+    if (!entry) return ''
+    return formatTrafficForAi(entry, locale)
+  }, [entry, locale])
+
+  const tabCounts = useMemo(() => {
+    if (!entry) return {}
+    const counts: Partial<Record<PanelTab, number | null>> = {}
+    // headers
+    if (entry.responseHeaders) {
+      counts.header = Object.keys(entry.responseHeaders).length
+    }
+    // cookies
+    const cookies = entry.responseHeaders ? parseResponseCookies(entry.responseHeaders) : {}
+    counts.cookies = Object.keys(cookies).length
+    // body
+    const body = entry.responseChunks.join('')
+    counts.body = body ? 1 : 0
+    // stream
+    counts.stream = entry.responseChunks.length
+    // raw
+    const raw = formatResponseRaw(entry)
+    counts.raw = raw ? 1 : 0
+    // console
+    counts.console = entry.error ? 1 : 0
+    return counts
+  }, [entry])
+
   return (
     <SidePanel
       title={t('detail.response')}
@@ -151,7 +182,18 @@ export default function ResponsePanel({ entry, onTitleClick }: Props) {
       onTabChange={setTab}
       tabs={tabs}
       bodySize={entry?.responseChunks.reduce((s, c) => s + c.length, 0)}
-      onTitleClick={onTitleClick}>
+      onTitleClick={onTitleClick}
+      tabCounts={tabCounts}
+      actions={
+        entry && (!!entry.error || (entry.status != null && entry.status !== 200)) ? (
+          <CopyButton
+            text={copyForAiText}
+            size="xs"
+            label={t('detail.copyForAi')}
+            className="text-ui-xs text-muted-foreground hover:text-foreground transition-colors"
+          />
+        ) : undefined
+      }>
       <ResponsePanelContent tab={tab} entry={entry} t={t} onCloseStream={() => setTab('header')} />
     </SidePanel>
   )
@@ -185,7 +227,7 @@ function ResponsePanelContent({
 
   if (tab === 'cookies') {
     const cookies = entry.responseHeaders ? parseResponseCookies(entry.responseHeaders) : {}
-    return <KeyValueTable data={cookies} emptyLabel={t('detail.noCookies')} />
+    return <KeyValueTable data={cookies} emptyLabel="" />
   }
 
   if (tab === 'body') {
@@ -198,7 +240,7 @@ function ResponsePanelContent({
     return body ? (
       <BodyView body={body} contentType={entry.responseContentType} />
     ) : (
-      <Empty><EmptyTitle>{t('detail.noBody')}</EmptyTitle></Empty>
+      <Empty />
     )
   }
 

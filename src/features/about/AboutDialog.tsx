@@ -42,7 +42,7 @@ export default function AboutDialog({ open, onOpenChange }: Props) {
         </div>
 
         <DialogFooter className="sm:justify-center">
-          <Button onClick={() => onOpenChange(false)}>{t('about.close')}</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t('about.close')}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

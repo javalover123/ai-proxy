@@ -296,7 +296,7 @@ export default function SslConfigDialog({ open, onOpenChange }: Props) {
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             {t('sslConfig.cancel')}
           </Button>
-          <Button onClick={handleSave} disabled={loading || saving}>
+          <Button variant="outline" onClick={handleSave} disabled={loading || saving}>
             {saving ? t('sslConfig.saving') : t('sslConfig.save')}
           </Button>
         </DialogFooter>
