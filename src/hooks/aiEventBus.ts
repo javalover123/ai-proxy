@@ -3,7 +3,7 @@
 import type { ProxyEvent } from '@/types/proxy'
 
 /** 仅 AI 相关事件在总线上流转 */
-export type AiEvent = Extract<ProxyEvent, { type: 'ai_normalized' | 'ai_session' }>
+export type AiEvent = Extract<ProxyEvent, { type: 'ai_timeline' | 'ai_session' }>
 
 type Listener = (event: AiEvent) => void
 

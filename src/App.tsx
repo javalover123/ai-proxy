@@ -18,7 +18,6 @@ import { ProxyView } from '@/features/proxy'
 import type { ViewId, ScriptTab } from '@/types/view'
 import type { ProxyJumpTarget } from '@/types/proxy'
 import { useProxyEvents } from '@/hooks/useProxyEvents'
-import { useAiSessions } from '@/hooks/useAiSessions'
 import { useTheme } from '@/hooks/useTheme'
 import { useProseFontSize } from '@/hooks/useProseFontSize'
 import { copyToClipboard } from '@/lib/clipboard'
@@ -56,6 +55,8 @@ function App() {
   const [toolbarExpanded, setToolbarExpanded] = useState(false)
   // 从 AI 视图跳转到代理视图并定位某条流量的指令（含自增 nonce）。
   const [proxyJump, setProxyJump] = useState<ProxyJumpTarget | null>(null)
+  // 清空流量联动清空 AI 会话的递增信号（AiView 消费）
+  const [aiClearNonce, setAiClearNonce] = useState(0)
   // 从 AI 视图导入请求到 new-request 编辑器（含自增 nonce 确保重复触发）
   const [importEditorTrigger, setImportEditorTrigger] = useState<{ entryId: number; nonce: number } | null>(null)
   // mountedViews: which views have their component currently mounted.
@@ -194,7 +195,6 @@ function App() {
     // 不跳转，保持在 new-request 视图查看响应
   }, [])
   const { entries, clear } = useProxyEvents()
-  const { sessions: aiSessions, mergedTimeline, conversationOf, removeSession, removeRequest, clearAll: clearAiSessions } = useAiSessions()
 
   const handleCloseTab = useCallback((view: ViewId) => {
     if (view === 'proxy') return
@@ -204,9 +204,8 @@ function App() {
       return next
     })
     setActiveTabId('proxy')
-    // 关闭 AI tab 时释放 sessions 数据引用，让 GC 可回收
-    if (view === 'ai') clearAiSessions()
-  }, [clearAiSessions])
+    // 关闭 AI tab → AiView 卸载，useAiSessions 随之退订并释放内存
+  }, [])
 
   // AI 气泡右键 → 复制 cURL：用 entries 中同 id 的原始代理请求数据生成
   const handleCopyCurl = useCallback((requestId: number) => {
@@ -354,7 +353,7 @@ function App() {
         running={running}
         onStartProxy={startProxy}
         onStopProxy={stopProxy}
-        onClearTraffic={() => { clear(); clearAiSessions() }}
+        onClearTraffic={() => { clear(); setAiClearNonce(n => n + 1) }}
         mountedViews={mountedViews}
         onViewChange={handleViewChange}
         onCloseTab={handleCloseTab}
@@ -404,13 +403,9 @@ function App() {
           {mountedViews.has('ai') && (
             <div className={activeTabId === 'ai' ? 'min-h-0 flex-1' : 'hidden'}>
               <AiView
-                sessions={aiSessions}
-                mergedTimeline={mergedTimeline}
-                conversationOf={conversationOf}
                 showSidebar={showSidebar}
+                clearNonce={aiClearNonce}
                 onJumpToProxy={handleJumpToProxy}
-                onDeleteSession={removeSession}
-                onDeleteRequest={removeRequest}
                 onCopyCurl={handleCopyCurl}
                 onImportToEditor={handleImportToEditor}
               />

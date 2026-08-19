@@ -277,8 +277,8 @@ impl AnthropicStreamState {
         let mut usage = self.base_usage.clone();
         if let Some(ot) = self.output_tokens {
             let u = usage.get_or_insert_default();
-            u.completion_tokens = Some(ot);
-            u.total_tokens = Some(u.prompt_tokens.unwrap_or(0) + ot);
+            u.output_tokens = Some(ot);
+            u.total_tokens = Some(u.input_tokens.unwrap_or(0) + ot);
         }
         usage
     }

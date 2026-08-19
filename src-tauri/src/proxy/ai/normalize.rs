@@ -64,14 +64,61 @@ impl AiTurn {
     }
 }
 
+/// 传输用：把 turn 里 thinking 的正文剥掉，仅保留占位（text 置空）。
+/// 前端据此渲染 thinking 气泡；正文经 `get_ai_thinking` 按需拉取。
+/// 流式增量、finalize 快照、`get_ai_session` 统一走此函数，保证两条路一致。
+pub(crate) fn strip_thinking(turn: &AiTurn) -> AiTurn {
+    let mut stripped = turn.clone();
+    for block in &mut stripped.content {
+        if let AiContentBlock::Thinking { text } = block {
+            text.clear();
+        }
+    }
+    stripped
+}
+
+/// 时间线 turn 的传输形态：thinking 正文已剥，fingerprint 作为稳定 turn id
+/// （已定稿 turn 有；流式中未落库的 assistant turn 无）。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct AiTimelineTurnDto {
+    pub(crate) request_id: u64,
+    pub(crate) role: String,
+    pub(crate) content: Vec<AiContentBlock>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) fingerprint: Option<u64>,
+}
+
+impl AiTimelineTurnDto {
+    /// 已定稿 turn：带 fingerprint（供 get_ai_thinking 寻址）。
+    pub(crate) fn committed(request_id: u64, fingerprint: u64, turn: &AiTurn) -> Self {
+        AiTimelineTurnDto {
+            request_id,
+            role: turn.role.clone(),
+            content: strip_thinking(turn).content,
+            fingerprint: Some(fingerprint),
+        }
+    }
+
+    /// 流式中未落库的 assistant turn：无 fingerprint。
+    pub(crate) fn streaming(request_id: u64, turn: &AiTurn) -> Self {
+        AiTimelineTurnDto {
+            request_id,
+            role: turn.role.clone(),
+            content: strip_thinking(turn).content,
+            fingerprint: None,
+        }
+    }
+}
+
 /// token 用量。字段可选，因不同 provider / 流式阶段提供的信息不同。
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct AiUsage {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub prompt_tokens: Option<u64>,
+    pub input_tokens: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub completion_tokens: Option<u64>,
+    pub output_tokens: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub total_tokens: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -79,17 +126,21 @@ pub(crate) struct AiUsage {
     /// 缓存写入量（Anthropic cache_creation_input_tokens / Bedrock cacheWriteInputTokens）。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cache_creation_tokens: Option<u64>,
+    /// 推理 token（OpenAI/DeepSeek completion_tokens_details.reasoning_tokens）。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reasoning_tokens: Option<u64>,
 }
 
 impl AiUsage {
     /// 是否所有字段都缺失。usage JSON 存在但无可识别字段时用于过滤，
     /// 避免序列化出空对象 `{}` 误导前端的有值判断。
     pub(crate) fn is_empty(&self) -> bool {
-        self.prompt_tokens.is_none()
-            && self.completion_tokens.is_none()
+        self.input_tokens.is_none()
+            && self.output_tokens.is_none()
             && self.total_tokens.is_none()
             && self.cached_tokens.is_none()
             && self.cache_creation_tokens.is_none()
+            && self.reasoning_tokens.is_none()
     }
 
     /// 简单累加：各字段相加（None 视为 0，任一有值则结果为 Some）。真实计费口径。
@@ -100,11 +151,12 @@ impl AiUsage {
                 (x, y) => Some(x.unwrap_or(0) + y.unwrap_or(0)),
             }
         }
-        self.prompt_tokens = add(self.prompt_tokens, other.prompt_tokens);
-        self.completion_tokens = add(self.completion_tokens, other.completion_tokens);
+        self.input_tokens = add(self.input_tokens, other.input_tokens);
+        self.output_tokens = add(self.output_tokens, other.output_tokens);
         self.total_tokens = add(self.total_tokens, other.total_tokens);
         self.cached_tokens = add(self.cached_tokens, other.cached_tokens);
         self.cache_creation_tokens = add(self.cache_creation_tokens, other.cache_creation_tokens);
+        self.reasoning_tokens = add(self.reasoning_tokens, other.reasoning_tokens);
     }
 }
 
@@ -165,15 +217,21 @@ pub(crate) fn normalize_usage(usage: &Value) -> AiUsage {
         &["cache_creation_input_tokens", "cacheWriteInputTokens"],
     );
 
+    let reasoning_tokens = usage
+        .get("completion_tokens_details")
+        .and_then(|d| d.get("reasoning_tokens"))
+        .and_then(Value::as_u64);
+
     AiUsage {
-        prompt_tokens: input_tokens,
-        completion_tokens: output_tokens,
+        input_tokens,
+        output_tokens,
         total_tokens: total_tokens.or_else(|| match (input_tokens, output_tokens) {
             (None, None) => None,
             (i, o) => Some(i.unwrap_or(0) + o.unwrap_or(0)),
         }),
         cached_tokens,
         cache_creation_tokens,
+        reasoning_tokens,
     }
 }
 

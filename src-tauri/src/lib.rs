@@ -14,12 +14,13 @@ use crate::commands::open_url;
 use crate::commands::resend_request;
 use crate::commands::{
     create_collection, create_folder, create_request, delete_node, duplicate_request,
-    export_ca_cert, get_ai_config, get_collections, get_locale, get_prose_font_size,
-    get_script_config, get_script_content, get_settings, get_ssl_config, get_status, get_theme,
-    install_ca_cert, move_node, read_ca_cert_pem, rename_node, save_ai_config, save_request,
-    save_script_config, save_script_content, save_settings, save_ssl_config, set_ai_enabled,
-    set_locale, set_prose_font_size, set_script_enabled, set_ssl_enabled, set_theme, start_proxy,
-    stop_proxy, subscribe_proxy_events, sync_tray_locale, test_rule_match,
+    export_ca_cert, get_ai_config, get_ai_session, get_ai_thinking, get_collections, get_locale,
+    get_prose_font_size, get_script_config, get_script_content, get_settings, get_ssl_config,
+    get_status, get_theme, install_ca_cert, list_ai_sessions, move_node, read_ca_cert_pem,
+    rename_node, save_ai_config, save_request, save_script_config, save_script_content,
+    save_settings, save_ssl_config, set_ai_enabled, set_locale, set_prose_font_size,
+    set_script_enabled, set_ssl_enabled, set_theme, start_proxy, stop_proxy,
+    subscribe_proxy_events, sync_tray_locale, test_rule_match,
 };
 use crate::config::{Settings, Store};
 
@@ -172,6 +173,9 @@ pub fn run() {
             sync_tray_locale,
             load_traffic_history,
             get_traffic_detail,
+            list_ai_sessions,
+            get_ai_session,
+            get_ai_thinking,
             resend_request,
             get_collections,
             create_collection,

@@ -5,7 +5,7 @@ use rama::Layer;
 use rama::error::{BoxError, ErrorContext};
 use rama::http::BodyLimitLayer;
 use rama::http::layer::trace::TraceLayer;
-use rama::http::layer::upgrade::{DefaultHttpProxyConnectReplyService, UpgradeLayer};
+use rama::http::layer::upgrade::{LazyHttpProxyConnectReplyService, UpgradeLayer};
 use rama::http::matcher::MethodMatcher;
 use rama::http::server::HttpServer;
 use rama::http::{Body, Response, StatusCode};
@@ -90,7 +90,7 @@ impl ProxyServer {
             .map(|s| s.ai.session.max_sessions)
             .unwrap_or(500);
         let sessions: Arc<Mutex<SessionStore>> =
-            Arc::new(Mutex::new(SessionStore::new(max_sessions)));
+            Arc::new(Mutex::new(SessionStore::load(&db, max_sessions)));
 
         graceful.spawn_task_fn({
             move |_guard| async move {
@@ -106,10 +106,10 @@ impl ProxyServer {
                     (
                         TraceLayer::new_for_http(),
                         ConsumeErrLayer::default(),
-                        UpgradeLayer::new(
+                        UpgradeLayer::new_with_services(
                             exec,
                             MethodMatcher::CONNECT,
-                            DefaultHttpProxyConnectReplyService::new(),
+                            LazyHttpProxyConnectReplyService::new(),
                             service_fn(http_connect_proxy),
                         ),
                     )

@@ -11,7 +11,7 @@ pub(crate) mod request;
 pub(crate) mod response;
 pub(crate) mod session;
 
-pub(crate) use normalize::{AiConversation, AiTurn, AiUsage};
+pub(crate) use normalize::{AiConversation, AiTimelineTurnDto, AiTurn, AiUsage};
 
 /// AI 协议完整接口。新增协议只需实现此 trait + 在 Provider 加一个变体。
 pub(crate) trait AiProtocol {

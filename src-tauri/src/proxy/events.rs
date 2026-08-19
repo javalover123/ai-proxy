@@ -1,7 +1,7 @@
 use serde::Serialize;
 use std::collections::HashMap;
 
-use crate::proxy::ai::{AiConversation, AiTurn, AiUsage};
+use crate::proxy::ai::{AiTimelineTurnDto, AiUsage};
 
 /// Tagged union sent through the IPC Channel.
 /// Frontend dispatches on `type` (serialized as snake_case).
@@ -38,18 +38,29 @@ pub(crate) enum ProxyEvent {
         id: u64,
         error: String,
     },
-    /// 归一化快照（流式节流快照或定稿快照）。每事件自包含：conversation 中
-    /// assistant 回复由响应侧填充，request_turns 由请求侧解析后转入，前端直接拼接。
-    AiNormalized {
-        id: u64,
+    /// 时间线事件：delta（流式/请求侧增量）或 snapshot（finalize 整条快照）。
+    /// 前端不再做 LCP 去重：snapshot 整体替换，delta 按「移除本次 request_id 的
+    /// 旧条目 + 追加」机械应用。turns 内 thinking 正文已剥（按需 get_ai_thinking）。
+    AiTimeline {
         session_id: String,
-        provider: String,
-        /// 该次响应归一化对话（assistant 回复 + 元信息）。
-        conversation: AiConversation,
+        request_id: u64,
+        /// true = 整条去重 timeline 快照；false = 本次请求的增量 turns。
+        snapshot: bool,
+        turns: Vec<AiTimelineTurnDto>,
+        /// 本次请求元信息（流式阶段 finish_reason/duration_ms/usage 缺省）。
         streaming: bool,
-        /// 本次请求归一化后的 turns（请求体 messages），按序。
-        #[serde(default, skip_serializing_if = "Vec::is_empty")]
-        request_turns: Vec<AiTurn>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        model: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        finish_reason: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        first_chunk_ms: Option<u64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        duration_ms: Option<u64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        start_ms: Option<i64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        usage: Option<AiUsage>,
     },
     /// 会话元信息。会话新增请求或 usage 变化时推送。
     AiSession {

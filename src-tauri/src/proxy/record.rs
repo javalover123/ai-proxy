@@ -141,6 +141,7 @@ impl ResponseObserver {
     fn new(ctx: ProxyCtx, status: u16, is_sse: bool) -> Self {
         let ai_req = ctx.ai_req();
         let db = ctx.db_ref().cloned();
+        let ai_db = db.clone();
         let db_id = ctx.db_id();
         let needs_body_buf = db.is_some() && db_id.is_some() && !is_sse;
 
@@ -154,16 +155,17 @@ impl ResponseObserver {
             chunk_bytes: 0,
         };
 
-        let request_turns = ctx.request_turns();
+        let request_delta = ctx.request_delta();
 
         let ai = ai_req.map(|(provider, session_id)| {
             AiState::new(
                 provider,
                 session_id,
                 ctx.sessions().cloned(),
+                ai_db,
                 ctx.start_ms(),
                 is_sse,
-                request_turns,
+                request_delta,
             )
         });
 
@@ -211,6 +213,13 @@ impl BodyObserver for ResponseObserver {
                 buf_pool::push_capped(buf, &text);
             }
         }
+    }
+
+    fn on_aborted(&mut self) {
+        log::warn!(
+            "[traffic] response body aborted mid-stream for request {}",
+            self.ctx.request_id()
+        );
     }
 
     fn on_eos(&mut self) {

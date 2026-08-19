@@ -13,21 +13,31 @@ export interface AiTurn {
   content: AiContentBlock[]
 }
 
-/** 后端 AiTimelineDelta 中的一条时间线条目 */
-export interface TimelineEntry {
-  fingerprint: number
+/** 时间线条目：渲染用（去重后的 turn + 其归属请求）。fingerprint 为稳定 turn id，供按需拉取 thinking。 */
+export interface TimelineItem {
   turn: AiTurn
   requestId: number
+  fingerprint?: number
+}
+
+/** 后端 get_ai_session / ai_timeline 事件返回的时间线条目（thinking 已剥正文，fingerprint 定位） */
+export interface AiTimelineTurnDto {
+  requestId: number
+  role: AiTurn['role']
+  content: AiContentBlock[]
+  fingerprint?: number
 }
 
 export interface AiUsage {
-  promptTokens?: number
-  completionTokens?: number
+  inputTokens?: number
+  outputTokens?: number
   totalTokens?: number
   /** 缓存命中（cache read）token 数 */
   cachedTokens?: number
   /** 缓存写入（cache creation）token 数 */
   cacheCreationTokens?: number
+  /** 推理 token 数（completion_tokens_details.reasoning_tokens） */
+  reasoningTokens?: number
 }
 
 export interface AiConversation {
@@ -53,7 +63,7 @@ export function isAiProvider(s: string): s is AiProvider {
   return s === 'openai' || s === 'openai-responses' || s === 'anthropic' || s === 'gemini'
 }
 
-/** 前端会话状态：由 useAiSessions 从 AiNormalized / AiSession 事件累积。 */
+/** 前端会话状态：由 useAiSessions 从 list_ai_sessions + AI 事件累积。 */
 export interface AiSessionState {
   sessionId: string
   scopeHost: string
@@ -66,6 +76,30 @@ export interface AiSessionState {
   matchReason: string
   /** 来源归属（客户端名）：后端按命中的合并头确认，无则缺省 */
   source?: string
-  /** 每个请求 id → 该次归一化对话（纯响应侧数据：assistant turns + 元信息） */
-  conversations: Record<number, AiConversation>
+  /** 每个请求 id → 该次归一化元信息（不含 turns，轻量；turns 走 timeline 单独拉取） */
+  requests: Record<number, AiRequestMeta>
+}
+
+/** 单次请求的归一化元信息（不含 turns） */
+export interface AiRequestMeta {
+  id: number
+  streaming: boolean
+  model?: string
+  finishReason?: string
+  firstChunkMs?: number
+  durationMs?: number
+  startMs?: number
+  usage?: AiUsage
+}
+
+/** 后端 list_ai_sessions 返回的会话摘要（requests 为数组） */
+export interface AiSessionSummary {
+  sessionId: string
+  scopeHost: string
+  title?: string
+  source?: string
+  matchReason: string
+  requestIds: number[]
+  usageTotal: AiUsage
+  requests: AiRequestMeta[]
 }

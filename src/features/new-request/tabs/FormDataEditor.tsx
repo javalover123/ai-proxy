@@ -122,7 +122,7 @@ export default function FormDataEditor({ body, onChange }: FormDataEditorProps) 
                 className="flex-[2] h-auto py-1 text-prose-sm font-mono"
                 placeholder="Value"
               />
-              <Select value={entry.type} onValueChange={v => handleChange(i, 'type', v)}>
+              <Select value={entry.type} onValueChange={v => { if (v) handleChange(i, 'type', v) }}>
                 <SelectTrigger size="sm" className="h-auto py-1 w-[60px] shrink-0 text-prose-sm">
                   <SelectValue />
                 </SelectTrigger>

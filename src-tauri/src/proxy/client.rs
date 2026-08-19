@@ -70,6 +70,7 @@ pub(crate) fn build_upstream_service(
             .with_proxy_support()
             .with_tls_support_using_rustls_and_default_http_version(tls_config, Version::HTTP_11)
             .with_default_http_connector(Executor::default())
+            .with_default_connection_pool()
             .build_client()
     } else {
         EasyHttpWebClient::connector_builder()
@@ -79,6 +80,7 @@ pub(crate) fn build_upstream_service(
             .without_proxy_support()
             .with_tls_support_using_rustls_and_default_http_version(tls_config, Version::HTTP_11)
             .with_default_http_connector(Executor::default())
+            .with_default_connection_pool()
             .build_client()
     };
 

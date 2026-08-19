@@ -6,8 +6,11 @@ use tauri::ipc::Channel;
 
 use crate::proxy::events::ProxyEvent;
 
-use super::normalize::{AiContentBlock, AiConversation, AiTurn, JsonValueExt};
-use super::session::SessionStore;
+use crate::config::db::Db;
+use crate::storage::ai::{AiRequestFinalParams, AiSessionFinalParams, AiTurnInsert};
+
+use super::normalize::{AiContentBlock, AiConversation, AiTimelineTurnDto, AiTurn, JsonValueExt};
+use super::session::{SessionStore, TimelineEntry};
 use super::{Provider, StreamState};
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -28,6 +31,8 @@ pub(crate) struct AiState {
     provider: Provider,
     session_id: String,
     sessions: Option<Arc<Mutex<SessionStore>>>,
+    /// DB 连接（proxy 解密流量有；resend 等场景为 None），供响应侧入库。
+    db: Option<Arc<Db>>,
     start_ms: i64,
     /// 流式状态机。`None` 表示非流式响应——EOS 时从完整 body 解析。
     stream_state: Option<Box<dyn StreamState>>,
@@ -35,8 +40,8 @@ pub(crate) struct AiState {
     raw_keys: HashSet<String>,
     /// 流式节流计数器（累计 SSE data 长度）；非流式恒为 0。
     stream_acc: usize,
-    /// 请求侧归一化 turns，供 AiNormalized 事件自包含。
-    request_turns: Vec<AiTurn>,
+    /// 请求侧增量 user turns（含 fingerprint），供时间线增量构造。
+    request_delta: Vec<TimelineEntry>,
 }
 
 impl AiState {
@@ -44,9 +49,10 @@ impl AiState {
         provider: Provider,
         session_id: String,
         sessions: Option<Arc<Mutex<SessionStore>>>,
+        db: Option<Arc<Db>>,
         start_ms: i64,
         is_sse: bool,
-        request_turns: Vec<AiTurn>,
+        request_delta: Vec<TimelineEntry>,
     ) -> Self {
         let (stream_state, raw_keys, stream_acc) = if is_sse {
             (Some(provider.create_stream_state()), HashSet::new(), 0usize)
@@ -57,12 +63,28 @@ impl AiState {
             provider,
             session_id,
             sessions,
+            db,
             start_ms,
             stream_state,
             raw_keys,
             stream_acc,
-            request_turns,
+            request_delta,
         }
+    }
+
+    /// 本次请求的时间线增量：增量 user turns（含 fingerprint）+ 流式 assistant turns（无 fingerprint）。
+    fn delta_turns(&self, request_id: u64, assistant: &[AiTurn]) -> Vec<AiTimelineTurnDto> {
+        let mut turns: Vec<AiTimelineTurnDto> = self
+            .request_delta
+            .iter()
+            .map(|e| AiTimelineTurnDto::committed(request_id, e.fingerprint, &e.turn))
+            .collect();
+        turns.extend(
+            assistant
+                .iter()
+                .map(|t| AiTimelineTurnDto::streaming(request_id, t)),
+        );
+        turns
     }
 
     /// SSE 路径：消费分帧后的 events — JSON 解析 → 状态机驱动 → 节流快照。
@@ -90,13 +112,8 @@ impl AiState {
             let mut snap = state.snapshot();
             snap.start_ms = Some(self.start_ms);
             snap.first_chunk_ms = first_chunk_at.map(|at| (at - self.start_ms).max(0) as u64);
-            emit_ai_normalized(
-                sender,
-                request_id,
-                &self.session_id,
-                snap,
-                &self.request_turns,
-            );
+            let turns = self.delta_turns(request_id, &snap.turns);
+            emit_ai_timeline(sender, &self.session_id, request_id, false, turns, &snap);
         }
     }
 
@@ -172,22 +189,95 @@ impl AiState {
                 }
             }
 
-            // 助理 turns 写入后端 SessionStore（供 prefix 匹配），
-            // 不再通过 AiTimelineDelta 推前端——前端从 AiNormalized.conversation 自包含消费。
+            // 助理 turns 写入后端 SessionStore（供 prefix 匹配），并就地读全量
+            // timeline 构造 finalize 快照（自愈：覆盖任何漏掉的流式增量）。
             let assistant_turns: Vec<AiTurn> = conv.turns.clone();
-            if let Some(ref sessions) = self.sessions {
-                let mut store = sessions.lock().expect("sessions lock");
-                store.append_assistant_turns(&self.session_id, request_id, &assistant_turns);
-            }
-
-            emit_ai_normalized(
+            let snapshot_turns: Vec<AiTimelineTurnDto> = match self.sessions.as_ref() {
+                Some(sessions) => {
+                    let mut store = sessions.lock().expect("sessions lock");
+                    store.append_assistant_turns(&self.session_id, request_id, &assistant_turns);
+                    store
+                        .get(&self.session_id)
+                        .map(|entry| {
+                            entry
+                                .timeline
+                                .iter()
+                                .map(|e| {
+                                    AiTimelineTurnDto::committed(
+                                        e.request_id,
+                                        e.fingerprint,
+                                        &e.turn,
+                                    )
+                                })
+                                .collect()
+                        })
+                        .unwrap_or_default()
+                }
+                None => Vec::new(),
+            };
+            emit_ai_timeline(
                 sender,
-                request_id,
                 &self.session_id,
-                conv.clone(),
-                &self.request_turns,
+                request_id,
+                true,
+                snapshot_turns,
+                &conv,
             );
             commit_ai_final(sender, &self.sessions, request_id, &self.session_id, &conv);
+
+            // 入库（响应侧）：请求元信息 + assistant turns + 会话 usage/title。
+            if let (Some(db), Some(sessions)) = (&self.db, &self.sessions) {
+                let now = crate::utils::date::now_ms();
+                let usage = conv.usage.as_ref();
+                let _ = db.update_ai_request_final(AiRequestFinalParams {
+                    id: request_id as i64,
+                    streaming: conv.streaming as i64,
+                    model: conv.model.clone(),
+                    finish_reason: conv.finish_reason.clone(),
+                    first_chunk_ms: conv.first_chunk_ms.map(|v| v as i64),
+                    duration_ms: conv.duration_ms.map(|v| v as i64),
+                    input_tokens: usage.and_then(|u| u.input_tokens).map(|v| v as i64),
+                    output_tokens: usage.and_then(|u| u.output_tokens).map(|v| v as i64),
+                    total_tokens: usage.and_then(|u| u.total_tokens).map(|v| v as i64),
+                    cached_tokens: usage.and_then(|u| u.cached_tokens).map(|v| v as i64),
+                    cache_creation_tokens: usage
+                        .and_then(|u| u.cache_creation_tokens)
+                        .map(|v| v as i64),
+                    reasoning_tokens: usage.and_then(|u| u.reasoning_tokens).map(|v| v as i64),
+                });
+
+                let inserts: Vec<AiTurnInsert> = assistant_turns
+                    .iter()
+                    .map(|t| AiTurnInsert {
+                        session_id: self.session_id.clone(),
+                        request_id: request_id as i64,
+                        role: t.role.clone(),
+                        fingerprint: super::session::turn_fingerprint(t) as i64,
+                        content: serde_json::to_string(&t.content)
+                            .unwrap_or_else(|_| "[]".to_string()),
+                    })
+                    .collect();
+                let _ = db.insert_ai_turns(inserts);
+
+                let (title, usage_total) = {
+                    let store = sessions.lock().expect("sessions lock");
+                    store
+                        .get(&self.session_id)
+                        .map(|e| (e.title.clone(), e.usage_total.clone()))
+                        .unwrap_or_default()
+                };
+                let _ = db.update_ai_session_final(AiSessionFinalParams {
+                    id: self.session_id.clone(),
+                    title,
+                    input_tokens: usage_total.input_tokens.map(|v| v as i64),
+                    output_tokens: usage_total.output_tokens.map(|v| v as i64),
+                    total_tokens: usage_total.total_tokens.map(|v| v as i64),
+                    cached_tokens: usage_total.cached_tokens.map(|v| v as i64),
+                    cache_creation_tokens: usage_total.cache_creation_tokens.map(|v| v as i64),
+                    reasoning_tokens: usage_total.reasoning_tokens.map(|v| v as i64),
+                    updated_at: now,
+                });
+            }
         }
     }
 }
@@ -196,21 +286,27 @@ impl AiState {
 // 公共辅助函数
 // ══════════════════════════════════════════════════════════════════════════════
 
-pub(crate) fn emit_ai_normalized(
+pub(crate) fn emit_ai_timeline(
     sender: &Option<Channel<ProxyEvent>>,
-    request_id: u64,
     session_id: &str,
-    conv: AiConversation,
-    request_turns: &[AiTurn],
+    request_id: u64,
+    snapshot: bool,
+    turns: Vec<AiTimelineTurnDto>,
+    conv: &AiConversation,
 ) {
     if let Some(ch) = sender {
-        let _ = ch.send(ProxyEvent::AiNormalized {
-            id: request_id,
+        let _ = ch.send(ProxyEvent::AiTimeline {
             session_id: session_id.to_string(),
-            provider: conv.provider.clone(),
+            request_id,
+            snapshot,
+            turns,
             streaming: conv.streaming,
-            conversation: conv,
-            request_turns: request_turns.to_vec(),
+            model: conv.model.clone(),
+            finish_reason: conv.finish_reason.clone(),
+            first_chunk_ms: conv.first_chunk_ms,
+            duration_ms: conv.duration_ms,
+            start_ms: conv.start_ms,
+            usage: conv.usage.clone(),
         });
     }
 }

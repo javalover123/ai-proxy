@@ -170,9 +170,13 @@ function MultipartView({ parts }: { parts: FormField[] }) {
 }
 
 function MultipartPartCard({ part }: { part: FormField }) {
+  const { t } = useTranslation()
   const [expanded, setExpanded] = useState(true)
   const { resolvedTheme } = useTheme()
   const shikiTheme = resolvedTheme === 'dark' ? 'github-dark' : 'github-light'
+  // 带 filename 的 part 是文件上传：原始字节在捕获时已被 UTF-8 有损转换，无法恢复，
+  // 所以不解析/不高亮其内容，只展示文件元信息
+  const isFile = !!part.filename
   const lang = useMemo(() => {
     if (!part.contentType) return 'plaintext'
     const ct = part.contentType.toLowerCase()
@@ -184,7 +188,7 @@ function MultipartPartCard({ part }: { part: FormField }) {
     if (ct.includes('xml')) return 'xml'
     return 'plaintext'
   }, [part.contentType])
-  const highlightedBody = useShiki(part.value, lang, shikiTheme)
+  const highlightedBody = useShiki(isFile ? '' : part.value, lang, shikiTheme)
   const headerCount = Object.keys(part.headers).length
   const fileInfo = part.filename ? part.filename + (part.contentType ? ' (' + part.contentType + ')' : '') : null
   return (
@@ -207,12 +211,19 @@ function MultipartPartCard({ part }: { part: FormField }) {
               ))}
             </div>
           )}
-          <div className='relative group/mini'>
-            <div className="absolute top-1 right-1 z-10 transition-all opacity-0 group-hover/mini:opacity-100">
-              <CopyButton text={part.value} size="sm" className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-surface-elevated/50 transition-colors" />
+          {isFile ? (
+            <div className='px-2.5 py-2 text-prose-xs text-muted-foreground/70'>
+              <span>⚠ {t('detail.binaryFileHint')}</span>
+              <div className='mt-0.5 text-muted-foreground/50'>{t('detail.binaryFileHintSub')}</div>
             </div>
-            {highlightedBody ? <div className='shiki-body whitespace-pre-wrap break-all overflow-x-auto px-2.5 py-1.5'>{highlightedBody}</div> : <pre className='whitespace-pre-wrap break-all px-2.5 py-1.5 text-foreground/80 font-mono'>{part.value}</pre>}
-          </div>
+          ) : (
+            <div className='relative group/mini'>
+              <div className="absolute top-1 right-1 z-10 transition-all opacity-0 group-hover/mini:opacity-100">
+                <CopyButton text={part.value} size="sm" className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-surface-elevated/50 transition-colors" />
+              </div>
+              {highlightedBody ? <div className='shiki-body whitespace-pre-wrap break-all overflow-x-auto px-2.5 py-1.5'>{highlightedBody}</div> : <pre className='whitespace-pre-wrap break-all px-2.5 py-1.5 text-foreground/80 font-mono'>{part.value}</pre>}
+            </div>
+          )}
         </div>
       </CollapsibleContent>
     </Collapsible>

@@ -153,7 +153,7 @@ export function useProxyEvents() {
           triggerUpdate()
           break
         }
-        case 'ai_normalized':
+        case 'ai_timeline':
         case 'ai_session': {
           // AI 事件转发到独立总线，由 useAiSessions 消费；不污染 entries。
           publishAiEvent(event)

@@ -11,8 +11,7 @@ use tauri::ipc::Channel;
 
 use crate::config::Settings;
 use crate::config::db::Db;
-use crate::proxy::ai::AiTurn;
-use crate::proxy::ai::session::SessionStore;
+use crate::proxy::ai::session::{SessionStore, TimelineEntry};
 use crate::proxy::events::ProxyEvent;
 use crate::storage::id;
 
@@ -34,9 +33,9 @@ pub(crate) struct ProxyCtx {
     /// 请求侧归一化判定出的 (provider, session_id)，供响应侧消费。
     /// 每请求最多写一次（请求侧），之后只读（响应侧），故用 OnceLock 而非 Mutex。
     ai_req: OnceLock<(crate::proxy::ai::Provider, String)>,
-    /// 请求侧归一化：请求 turns 存入 ctx（OneShot），供响应侧构造
-    /// 自包含的 AiNormalized 事件（不再依赖 AiTimelineDelta 合并）。
-    request_turns: OnceLock<Vec<AiTurn>>,
+    /// 请求侧归一化：本次请求的增量 user turns（含 fingerprint）存入 ctx，
+    /// 供响应侧构造时间线增量（AiTimeline delta）。
+    request_delta: OnceLock<Vec<TimelineEntry>>,
     /// DB 连接（proxy 解密流量有；resend 等场景为 None）。
     db: Option<Arc<Db>>,
     /// 当前请求在 traffic_logs 表中的行 id（插入后由 DB 分配；写一次后只读）。
@@ -84,7 +83,7 @@ impl ProxyCtx {
             settings,
             sessions: None,
             ai_req: OnceLock::new(),
-            request_turns: OnceLock::new(),
+            request_delta: OnceLock::new(),
             db: None,
             db_id: OnceLock::new(),
         }
@@ -193,14 +192,14 @@ impl ProxyCtx {
         &self.settings
     }
 
-    /// 请求侧登记归一化 turns。仅首次写入生效。
-    pub(crate) fn set_ai_request_turns(&self, turns: Vec<AiTurn>) {
-        self.request_turns.set(turns).ok();
+    /// 请求侧登记本次请求的增量 turns（已含 fingerprint）。仅首次写入生效。
+    pub(crate) fn set_ai_request_delta(&self, delta: Vec<TimelineEntry>) {
+        self.request_delta.set(delta).ok();
     }
 
-    /// 响应侧读取请求侧 turns（浅克隆）。
-    pub(crate) fn request_turns(&self) -> Vec<AiTurn> {
-        self.request_turns.get().cloned().unwrap_or_default()
+    /// 响应侧读取请求侧增量 turns（浅克隆）。
+    pub(crate) fn request_delta(&self) -> Vec<TimelineEntry> {
+        self.request_delta.get().cloned().unwrap_or_default()
     }
 
     pub(crate) fn start_ms(&self) -> i64 {

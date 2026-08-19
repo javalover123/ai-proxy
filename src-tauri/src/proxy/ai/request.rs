@@ -1,8 +1,9 @@
 use crate::config::AiRuleSource;
 use crate::proxy::ctx::ProxyCtx;
 use crate::proxy::events::ProxyEvent;
+use crate::storage::ai::{AiTurnInsert, UpsertAiSessionParams};
 
-use super::Provider;
+use super::{AiTimelineTurnDto, Provider};
 
 /// 请求侧 AI 管线入口：provider 判定 → 请求归一化 → 会话分组 → 前端推送。
 /// `body_str` 由调用方 clone 传入，内部消费，不产生额外分配。
@@ -58,17 +59,74 @@ pub(crate) fn process_ai_request(ctx: &ProxyCtx, body_str: Option<String>) {
     // 登记 (provider, session_id) 供响应侧使用。
     ctx.set_ai_req(provider, result.session_id.clone());
 
-    // 请求侧 turns 存入 ctx，供响应侧构造自包含的 AiNormalized。
-    ctx.set_ai_request_turns(turns);
+    // 本次请求的增量 user turns（含 fingerprint）存入 ctx，供响应侧构造时间线增量。
+    ctx.set_ai_request_delta(result.delta.clone());
+
+    // 入库（请求侧）：会话 + 请求 + user-turn 增量。resend 等无 DB 路径跳过。
+    if let Some(db) = ctx.db_ref() {
+        let now = crate::utils::date::now_ms();
+        let last_fp =
+            serde_json::to_string(&result.last_fingerprints).unwrap_or_else(|_| "[]".to_string());
+        let _ = db.upsert_ai_session(UpsertAiSessionParams {
+            id: result.session_id.clone(),
+            provider: provider.as_str().to_string(),
+            host: host.clone(),
+            title: result.title.clone(),
+            source: result.source.clone(),
+            match_reason: result.match_reason.clone(),
+            last_fingerprints: last_fp,
+            created_at: now,
+            updated_at: now,
+        });
+        let _ = db.insert_ai_request(
+            ctx.request_id() as i64,
+            &result.session_id,
+            ctx.start_ms(),
+            now,
+        );
+        let inserts: Vec<AiTurnInsert> = result
+            .delta
+            .iter()
+            .map(|e| AiTurnInsert {
+                session_id: result.session_id.clone(),
+                request_id: e.request_id as i64,
+                role: e.turn.role.clone(),
+                fingerprint: e.fingerprint as i64,
+                content: serde_json::to_string(&e.turn.content)
+                    .unwrap_or_else(|_| "[]".to_string()),
+            })
+            .collect();
+        let _ = db.insert_ai_turns(inserts);
+    }
 
     ctx.send(ProxyEvent::AiSession {
-        session_id: result.session_id,
+        session_id: result.session_id.clone(),
         scope_host: host,
         request_ids: result.request_ids,
         usage_total: result.usage_total,
         match_reason: result.match_reason,
         title: result.title,
         source: result.source,
+    });
+
+    // 请求侧推本次请求的增量 user turns（时间线 delta），用户消息即时上屏。
+    let delta_turns: Vec<AiTimelineTurnDto> = result
+        .delta
+        .iter()
+        .map(|e| AiTimelineTurnDto::committed(ctx.request_id(), e.fingerprint, &e.turn))
+        .collect();
+    ctx.send(ProxyEvent::AiTimeline {
+        session_id: result.session_id,
+        request_id: ctx.request_id(),
+        snapshot: false,
+        turns: delta_turns,
+        streaming: false,
+        model: None,
+        finish_reason: None,
+        first_chunk_ms: None,
+        duration_ms: None,
+        start_ms: Some(ctx.start_ms()),
+        usage: None,
     });
 }
 

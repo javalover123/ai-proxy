@@ -10,7 +10,8 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/componen
 import { usePanelRef } from 'react-resizable-panels'
 import { formatDayTime } from '@/lib/format'
 import { cn } from '@/lib/utils'
-import type { AiConversation, AiSessionState, AiTurn, AiContentBlock, TimelineEntry } from '@/types/ai'
+import type { AiRequestMeta, AiTurn, AiContentBlock, TimelineItem } from '@/types/ai'
+import { useAiSessions } from '@/hooks/useAiSessions'
 
 // ─── 工具调用提取 / 配对 ───────────────────────────────────────────
 
@@ -55,14 +56,14 @@ function collectToolItems(
 // ─── 渲染：全部 气泡时间线 ─────────────────────────────────────────
 
 function renderConversation(
-  rendered: { turn: AiTurn; requestId: number }[],
+  rendered: TimelineItem[],
   selection: AiSelection,
   reqIndex: Map<number, number>,
   isStreamingReq: (requestId: number) => boolean,
   mdSessions: Record<string, boolean>,
   onJumpToProxy: ((requestId: number) => void) | undefined,
   t: ReturnType<typeof useTranslation>['t'],
-  conversationOf: (requestId: number) => AiConversation | undefined,
+  requestMetaOf: (requestId: number) => AiRequestMeta | undefined,
 ): ReactNode {
   if (rendered.length === 0) {
     return (
@@ -73,13 +74,13 @@ function renderConversation(
   }
   let prevRequestId: number | undefined
   let prevTime: string | undefined
-  return rendered.map(({ turn, requestId }, i) => {
+  return rendered.map(({ turn, requestId, fingerprint }, i) => {
     const idx = reqIndex.get(requestId)
     const showLabel = !selection.requestId && idx != null
     const isLast = i === rendered.length - 1
     const isNewRequest = requestId !== prevRequestId
     prevRequestId = requestId
-    const ts = isNewRequest ? conversationOf(requestId)?.startMs : undefined
+    const ts = isNewRequest ? requestMetaOf(requestId)?.startMs : undefined
     const timeLabel = ts != null ? formatDayTime(ts) : undefined
     const showTime = timeLabel != null && timeLabel !== prevTime
     if (timeLabel != null) prevTime = timeLabel
@@ -96,6 +97,9 @@ function renderConversation(
           reqLabel={showLabel ? t('aiSidebar.turnLabel', '轮次 {{n}}', { n: idx }) : undefined}
           onJump={onJumpToProxy ? () => onJumpToProxy(requestId) : undefined}
           defaultView={mdSessions[selection.sessionId] ? 'md' : 'raw'}
+          sessionId={selection.sessionId}
+          requestId={requestId}
+          fingerprint={fingerprint}
         />
       </div>
     )
@@ -121,7 +125,7 @@ function stripToolBlocks(turn: AiTurn): AiTurn | null {
 }
 
 function renderNoTools(
-  rendered: { turn: AiTurn; requestId: number }[],
+  rendered: TimelineItem[],
   selection: AiSelection,
   reqIndex: Map<number, number>,
   isStreamingReq: (requestId: number) => boolean,
@@ -131,7 +135,7 @@ function renderNoTools(
 ): ReactNode {
   const items: ReactNode[] = []
   for (let i = 0; i < rendered.length; i++) {
-    const { turn, requestId } = rendered[i]
+    const { turn, requestId, fingerprint } = rendered[i]
     const stripped = stripToolBlocks(turn)
     if (!stripped) continue
 
@@ -146,6 +150,9 @@ function renderNoTools(
           reqLabel={showLabel ? t('aiSidebar.turnLabel', '轮次 {{n}}', { n: idx }) : undefined}
           onJump={onJumpToProxy ? () => onJumpToProxy(requestId) : undefined}
           defaultView={mdSessions[selection.sessionId] ? 'md' : 'raw'}
+          sessionId={selection.sessionId}
+          requestId={requestId}
+          fingerprint={fingerprint}
         />
       </div>,
     )
@@ -233,24 +240,20 @@ function renderToolCards(
 // ─── 组件 ───────────────────────────────────────────────────────────
 
 interface AiViewProps {
-  sessions: AiSessionState[]
-  mergedTimeline: (sessionId: string) => TimelineEntry[]
-  conversationOf: (requestId: number) => AiConversation | undefined
   showSidebar: boolean
+  /** 清空流量信号：值递增时联动清空 AI 会话（仅前端移除） */
+  clearNonce: number
   /** 点击气泡的跳转钮 → 切到代理视图并定位该请求。 */
   onJumpToProxy?: (requestId: number) => void
-  /** 右键删除整个会话（仅前端移除） */
-  onDeleteSession: (sessionId: string) => void
-  /** 右键删除会话内单次请求（仅前端移除） */
-  onDeleteRequest: (sessionId: string, requestId: number) => void
   /** 右键复制该轮对应请求的 cURL（使用代理记录的原始请求数据） */
   onCopyCurl?: (requestId: number) => void
   /** 右键导入到新请求编辑器 */
   onImportToEditor?: (requestId: number) => void
 }
 
-export function AiView({ sessions, mergedTimeline, conversationOf, showSidebar, onJumpToProxy, onDeleteSession, onDeleteRequest, onCopyCurl, onImportToEditor }: AiViewProps) {
+export function AiView({ showSidebar, clearNonce, onJumpToProxy, onCopyCurl, onImportToEditor }: AiViewProps) {
   const { t } = useTranslation()
+  const { sessions, mergedTimeline, requestMetaOf, removeSession, removeRequest, clearAll } = useAiSessions()
   const [selection, setSelection] = useState<AiSelection | null>(null)
   const [selectedTools, setSelectedTools] = useState<Set<string>>(new Set())
   const [isNoTools, setIsNoTools] = useState(false)
@@ -275,19 +278,28 @@ export function AiView({ sessions, mergedTimeline, conversationOf, showSidebar, 
   )
 
   const handleDeleteSession = useCallback((sessionId: string) => {
-    onDeleteSession(sessionId)
+    removeSession(sessionId)
     setSelection((sel) => (sel?.sessionId === sessionId ? null : sel))
-  }, [onDeleteSession])
+  }, [removeSession])
 
   const handleDeleteRequest = useCallback((sessionId: string, requestId: number) => {
     const remaining = sessions.find((s) => s.sessionId === sessionId)?.requestIds.filter((rid) => rid !== requestId).length ?? 0
-    onDeleteRequest(sessionId, requestId)
+    removeRequest(sessionId, requestId)
     setSelection((sel) => {
       if (sel?.sessionId !== sessionId) return sel
       if (remaining === 0) return null
       return sel.requestId === requestId ? { sessionId } : sel
     })
-  }, [onDeleteRequest, sessions])
+  }, [removeRequest, sessions])
+
+  // 清空流量信号 → 联动清空 AI 会话（仅前端移除，不通知后端）
+  const prevClearNonceRef = useRef(clearNonce)
+  useEffect(() => {
+    if (clearNonce !== prevClearNonceRef.current) {
+      prevClearNonceRef.current = clearNonce
+      clearAll()
+    }
+  }, [clearNonce, clearAll])
 
   const reqIndex = useMemo(() => {
     const m = new Map<number, number>()
@@ -295,13 +307,14 @@ export function AiView({ sessions, mergedTimeline, conversationOf, showSidebar, 
     return m
   }, [selectedSession])
 
-  const rendered = useMemo<TimelineEntry[]>(() => {
+  const rendered = useMemo<TimelineItem[]>(() => {
     if (!selection || !selectedSession) return []
     const tl = mergedTimeline(selection.sessionId)
-    if (selection.requestId) {
+    const requestId = selection.requestId
+    if (requestId) {
       // 单次请求视图：显示截至该请求完成时的累计时间线。
       // 时间线按 requestId 单调递增排列，取 <= 目标值的所有条目。
-      return tl.filter((e) => e.requestId <= selection.requestId)
+      return tl.filter((e) => e.requestId <= requestId)
     }
     return tl
   }, [selection, selectedSession, mergedTimeline])
@@ -315,7 +328,7 @@ export function AiView({ sessions, mergedTimeline, conversationOf, showSidebar, 
   }, [selection])
 
   const isStreamingReq = (requestId: number): boolean =>
-    conversationOf(requestId)?.streaming ?? false
+    requestMetaOf(requestId)?.streaming ?? false
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const stickToBottom = useRef(true)
@@ -405,7 +418,7 @@ export function AiView({ sessions, mergedTimeline, conversationOf, showSidebar, 
             <div className="relative flex-1 group/chat min-h-0">
             <div ref={scrollRef} onScroll={handleScroll} className="absolute inset-0 overflow-y-auto space-y-3 p-4">
               {isAll
-                ? renderConversation(rendered, selection, reqIndex, isStreamingReq, mdSessions, onJumpToProxy, t, conversationOf)
+                ? renderConversation(rendered, selection, reqIndex, isStreamingReq, mdSessions, onJumpToProxy, t, requestMetaOf)
                 : isNoTools
                 ? renderNoTools(rendered, selection, reqIndex, isStreamingReq, mdSessions, onJumpToProxy, t)
                 : renderToolCards(rendered, selectedTools, reqIndex, mdSessions, onJumpToProxy, t)

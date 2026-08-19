@@ -2,7 +2,10 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::mpsc;
 
+use crate::proxy::ai::AiTimelineTurnDto;
 use crate::storage::DbTable;
+use crate::storage::ai;
+use crate::storage::ai::AiTable;
 use crate::storage::collection_nodes;
 use crate::storage::collection_nodes::CollectionNodesTable;
 use crate::storage::collection_requests;
@@ -132,6 +135,36 @@ pub(crate) enum DbCmd {
         reply: mpsc::Sender<Result<(), sqlite::Error>>,
     },
 
+    // ── AI persistence ─────────────────────────────────────────────────────
+    UpsertAiSession(ai::UpsertAiSessionParams),
+    InsertAiRequest {
+        id: i64,
+        session_id: String,
+        start_ms: i64,
+        created_at: i64,
+    },
+    InsertAiTurns {
+        turns: Vec<ai::AiTurnInsert>,
+    },
+    UpdateAiRequestFinal(ai::AiRequestFinalParams),
+    UpdateAiSessionFinal(ai::AiSessionFinalParams),
+    LoadAiStore {
+        reply: mpsc::Sender<Result<ai::AiStoreSnapshot, sqlite::Error>>,
+    },
+    ListAiSessions {
+        reply: mpsc::Sender<Result<Vec<ai::AiSessionSummary>, sqlite::Error>>,
+    },
+    GetAiSession {
+        session_id: String,
+        reply: mpsc::Sender<Result<Vec<AiTimelineTurnDto>, sqlite::Error>>,
+    },
+    GetAiThinking {
+        session_id: String,
+        request_id: i64,
+        fingerprint: i64,
+        reply: mpsc::Sender<Result<Vec<String>, sqlite::Error>>,
+    },
+
     /// Graceful shutdown — writer thread exits after processing pending commands.
     Shutdown,
 }
@@ -187,6 +220,7 @@ fn migrate(conn: &sqlite::Connection) -> Result<(), sqlite::Error> {
     conn.execute("DROP TABLE IF EXISTS requests")?;
 
     // Each module handles its own table creation
+    AiTable::migrate(conn)?;
     CollectionNodesTable::migrate(conn)?;
     CollectionRequestsTable::migrate(conn)?;
     TrafficTable::migrate(conn)?;
@@ -430,6 +464,65 @@ fn writer_loop(conn: sqlite::Connection, rx: mpsc::Receiver<DbCmd>, db_path: Str
             DbCmd::DeleteNodeIfNotLast { node_id, reply } => {
                 reply
                     .send(collection_nodes::do_delete_node_if_not_last(&conn, node_id))
+                    .ok();
+            }
+
+            // ── AI persistence ─────────────────────────────────────────────
+            DbCmd::UpsertAiSession(p) => {
+                ai::do_upsert_ai_session(&conn, &p)
+                    .unwrap_or_else(|e| log::warn!("upsert_ai_session: {e}"));
+            }
+
+            DbCmd::InsertAiRequest {
+                id,
+                session_id,
+                start_ms,
+                created_at,
+            } => {
+                ai::do_insert_ai_request(&conn, id, &session_id, start_ms, created_at)
+                    .unwrap_or_else(|e| log::warn!("insert_ai_request: {e}"));
+            }
+
+            DbCmd::InsertAiTurns { turns } => {
+                ai::do_insert_ai_turns(&conn, &turns)
+                    .unwrap_or_else(|e| log::warn!("insert_ai_turns: {e}"));
+            }
+
+            DbCmd::UpdateAiRequestFinal(p) => {
+                ai::do_update_ai_request_final(&conn, &p)
+                    .unwrap_or_else(|e| log::warn!("update_ai_request_final: {e}"));
+            }
+
+            DbCmd::UpdateAiSessionFinal(p) => {
+                ai::do_update_ai_session_final(&conn, &p)
+                    .unwrap_or_else(|e| log::warn!("update_ai_session_final: {e}"));
+            }
+
+            DbCmd::LoadAiStore { reply } => {
+                reply.send(ai::do_load_ai_store(&conn)).ok();
+            }
+
+            DbCmd::ListAiSessions { reply } => {
+                reply.send(ai::do_list_ai_sessions(&conn)).ok();
+            }
+
+            DbCmd::GetAiSession { session_id, reply } => {
+                reply.send(ai::do_get_ai_session(&conn, &session_id)).ok();
+            }
+
+            DbCmd::GetAiThinking {
+                session_id,
+                request_id,
+                fingerprint,
+                reply,
+            } => {
+                reply
+                    .send(ai::do_get_ai_thinking(
+                        &conn,
+                        &session_id,
+                        request_id,
+                        fingerprint,
+                    ))
                     .ok();
             }
         }

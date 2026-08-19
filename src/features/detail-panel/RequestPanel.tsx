@@ -5,7 +5,7 @@ import SidePanel, { type PanelTab, type TabDef } from './components/SidePanel'
 import KeyValueTable from './components/KeyValueTable'
 import BodyView from './components/BodyView'
 import RawView from './components/RawView'
-import FormDataView from './FormDataView'
+import FormDataView, { hasFormDataContent } from './FormDataView'
 import { Empty, EmptyTitle } from '@/components/core/Empty'
 
 interface Props {
@@ -79,8 +79,8 @@ export default function RequestPanel({ entry, onTitleClick }: Props) {
     const formCt = entry.requestHeaders['content-type'] ?? entry.requestHeaders['Content-Type'] ?? ''
     counts.form = (entry.requestBody && formCt.includes('form')) ? 1 : 0
 
-    // body
-    counts.body = entry.requestBody ? 1 : 0
+    // body（form-data 不在 Body 标签页展示，计数需与渲染逻辑一致）
+    counts.body = entry.requestBody && !hasFormDataContent(entry.requestHeaders) ? 1 : 0
 
     // raw
     const raw = formatRequestRaw(entry)
@@ -136,6 +136,11 @@ function RequestPanelContent({ tab, entry, t }: { tab: PanelTab; entry: TrafficE
   }
 
   if (tab === 'body') {
+    // form-data 请求体不在 Body 中展示（原始 multipart/urlencoded 内容与 JSON 无关），
+    // 结构化数据看 Form-Data 标签页，原始报文看 Raw 标签页
+    if (hasFormDataContent(entry.requestHeaders)) {
+      return <Empty />
+    }
     return entry.requestBody ? (
       <BodyView body={entry.requestBody} contentType={entry.requestContentType} />
     ) : (

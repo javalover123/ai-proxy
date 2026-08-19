@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+pub(crate) mod ai;
 pub(crate) mod collection_nodes;
 pub(crate) mod collection_requests;
 pub(crate) mod id;

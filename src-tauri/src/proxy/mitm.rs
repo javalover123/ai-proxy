@@ -155,7 +155,10 @@ async fn tunnel_connect_proxy<P>(
             .with_connector(rama::dns::client::DnsConnector::new(
                 rama::tcp::client::service::TcpConnector::new(),
             ))
-            .into_layer(IoForwardService::new(executor)),
+            .into_layer(
+                IoForwardService::new(executor)
+                    .with_first_byte_timeout(std::time::Duration::from_secs(30)),
+            ),
     );
 
     let tunnel_result = tunnel_svc.serve(prefixed).await;
@@ -163,7 +166,17 @@ async fn tunnel_connect_proxy<P>(
     let duration_ms = (end_ts - start_ts) as u64;
 
     match tunnel_result {
-        Ok(()) => {
+        Ok(outcome) => {
+            log::info!(
+                "[tunnel] closed: reason={:?}, bytes_l_to_r={}, bytes_r_to_l={}, age={:?}",
+                outcome.reason(),
+                outcome.bytes_l_to_r(),
+                outcome.bytes_r_to_l(),
+                outcome.age(),
+            );
+            if let Some(err) = outcome.fatal_error() {
+                log::debug!("[tunnel] benign close: {err}");
+            }
             if let Some(ref ch) = event_channel {
                 ch.send(ProxyEvent::Response {
                     id: request_id,

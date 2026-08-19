@@ -13,7 +13,7 @@ export type BodyType = 'none' | 'auto' | 'json' | 'xml' | 'text' | 'urlencoded' 
  */
 export type RequestBody =
   | { mode: 'raw';  content: string;  language?: 'json' | 'xml' | 'text' | 'urlencoded' }
-  | { mode: 'formdata'; parts: FormDataPart[] }
+  | { mode: 'formData'; parts: FormDataPart[] }
   | null
 
 // FormDataPart 仅用于 IPC 的 multipart/form-data 传参

@@ -12,7 +12,10 @@ use serde::Serialize;
 use uuid::Uuid;
 
 use super::Provider;
-use super::normalize::{AiConversation, AiTurn, AiUsage};
+use super::normalize::{AiContentBlock, AiConversation, AiTurn, AiUsage};
+
+/// 单会话内存 timeline 上限（与前端历史一致，防止长会话下内存与 finalize 快照无界增长）。
+const MAX_TIMELINE: usize = 500;
 
 /// 会话时间线中的一条记录。fingerprint 供 LCP 快速比较，turn 为完整内容。
 #[derive(Debug, Clone, Serialize)]
@@ -58,6 +61,10 @@ pub(crate) struct AssignResult {
     pub title: Option<String>,
     /// 会话来源归属（见 [`SessionEntry::source`]）。
     pub source: Option<String>,
+    /// 本次新增的 user-turn 时间线条目（供入库）。
+    pub delta: Vec<TimelineEntry>,
+    /// 本次请求的完整指纹链（供入库 last_fingerprints）。
+    pub last_fingerprints: Vec<u64>,
 }
 
 pub(crate) struct AssignParams<'a> {
@@ -120,7 +127,7 @@ impl SessionStore {
             if let Some(val) = p.headers.get(&name.to_ascii_lowercase()) {
                 let sid = session_key(&scope, val);
                 let reason = format!("header:{name}");
-                self.touch_or_create(TouchParams {
+                let delta = self.touch_or_create(TouchParams {
                     sid: &sid,
                     scope: &scope,
                     fingerprints: &fingerprints,
@@ -130,7 +137,7 @@ impl SessionStore {
                     match_reason: &reason,
                     messages: p.messages,
                 });
-                return self.result_snapshot(sid, reason);
+                return self.result_snapshot(sid, reason, delta, fingerprints);
             }
         }
 
@@ -149,7 +156,7 @@ impl SessionStore {
                 }
             }
             if let Some((sid, _)) = best {
-                self.touch_or_create(TouchParams {
+                let delta = self.touch_or_create(TouchParams {
                     sid: &sid,
                     scope: &scope,
                     fingerprints: &fingerprints,
@@ -159,13 +166,13 @@ impl SessionStore {
                     match_reason: "prefix",
                     messages: p.messages,
                 });
-                return self.result_snapshot(sid, "prefix".to_string());
+                return self.result_snapshot(sid, "prefix".to_string(), delta, fingerprints);
             }
         }
 
         // ③ 新会话
         let sid = format!("sess-{}", Uuid::new_v4());
-        self.touch_or_create(TouchParams {
+        let delta = self.touch_or_create(TouchParams {
             sid: &sid,
             scope: &scope,
             fingerprints: &fingerprints,
@@ -175,11 +182,17 @@ impl SessionStore {
             match_reason: "new",
             messages: p.messages,
         });
-        self.result_snapshot(sid, "new".to_string())
+        self.result_snapshot(sid, "new".to_string(), delta, fingerprints)
     }
 
     /// 分组落定后就地读快照。新会话 tick 最大不会被 LRU 淘汰，entry 必然存在。
-    fn result_snapshot(&self, session_id: String, match_reason: String) -> AssignResult {
+    fn result_snapshot(
+        &self,
+        session_id: String,
+        match_reason: String,
+        delta: Vec<TimelineEntry>,
+        last_fingerprints: Vec<u64>,
+    ) -> AssignResult {
         let entry = &self.sessions[&session_id];
         AssignResult {
             request_ids: entry.request_ids.clone(),
@@ -188,12 +201,15 @@ impl SessionStore {
             source: entry.source.clone(),
             session_id,
             match_reason,
+            delta,
+            last_fingerprints,
         }
     }
 
     /// 更新/创建会话条目。timeline 保留 LCP 增量更新供 prefix 匹配，
-    /// 前端从 AiNormalized.conversation 自包含消费。
-    fn touch_or_create(&mut self, p: TouchParams<'_>) {
+    /// 前端从 AiNormalized.conversation 自包含消费。返回本次新增的
+    /// 时间线条目（delta），供调用方入库。
+    fn touch_or_create(&mut self, p: TouchParams<'_>) -> Vec<TimelineEntry> {
         match self.sessions.get_mut(p.sid) {
             Some(entry) => {
                 if !entry.request_ids.contains(&p.request_id) {
@@ -217,7 +233,8 @@ impl SessionStore {
                     })
                     .collect();
                 // 追加到时间线
-                entry.timeline.extend(delta);
+                entry.timeline.extend(delta.clone());
+                trim_timeline(&mut entry.timeline);
                 entry.last_fingerprints = p.fingerprints.to_vec();
                 entry.last_touched = p.tick;
                 entry.match_reason = p.match_reason.to_string();
@@ -225,6 +242,7 @@ impl SessionStore {
                 if let Some(src) = p.source {
                     entry.source = Some(src.to_string());
                 }
+                delta
             }
             None => {
                 // 新会话：全部 turns 都是增量
@@ -257,6 +275,7 @@ impl SessionStore {
                     },
                 );
                 self.evict_if_needed();
+                delta
             }
         }
     }
@@ -310,6 +329,7 @@ impl SessionStore {
             })
             .collect();
         entry.timeline.extend(entries);
+        trim_timeline(&mut entry.timeline);
     }
 
     /// 读取会话快照（供构造 AiSession 事件）。
@@ -332,25 +352,120 @@ impl SessionStore {
             log::info!("[ai-session] evicted LRU session {victim}");
         }
     }
+
+    /// 启动时从 DB 重建会话表，让会话分组与时间线跨重启连续。
+    /// 读取失败回退为空表（历史仍可读，前缀匹配从空开始）。
+    pub(crate) fn load(db: &crate::config::db::Db, max_sessions: usize) -> Self {
+        match db.load_ai_store() {
+            Ok(snapshot) => Self::from_snapshot(snapshot, max_sessions),
+            Err(e) => {
+                log::warn!("[ai-session] load from db failed: {e:?}, starting empty");
+                SessionStore::new(max_sessions)
+            }
+        }
+    }
+
+    fn from_snapshot(snapshot: crate::storage::ai::AiStoreSnapshot, max_sessions: usize) -> Self {
+        let mut sessions: HashMap<String, SessionEntry> = HashMap::new();
+        let mut max_tick: u64 = 0;
+
+        for row in snapshot.sessions {
+            let last_fingerprints: Vec<u64> =
+                serde_json::from_str(&row.last_fingerprints).unwrap_or_default();
+            let usage_total = AiUsage {
+                input_tokens: row.input_tokens.map(|v| v as u64),
+                output_tokens: row.output_tokens.map(|v| v as u64),
+                total_tokens: row.total_tokens.map(|v| v as u64),
+                cached_tokens: row.cached_tokens.map(|v| v as u64),
+                cache_creation_tokens: row.cache_creation_tokens.map(|v| v as u64),
+                reasoning_tokens: row.reasoning_tokens.map(|v| v as u64),
+            };
+            let last_touched = row.updated_at.max(0) as u64;
+            max_tick = max_tick.max(last_touched);
+            sessions.insert(
+                row.id.clone(),
+                SessionEntry {
+                    id: row.id,
+                    scope: (row.provider, row.host),
+                    request_ids: Vec::new(),
+                    last_fingerprints,
+                    timeline: Vec::new(),
+                    usage_total,
+                    title: row.title,
+                    source: row.source,
+                    match_reason: row.match_reason,
+                    last_touched,
+                },
+            );
+        }
+
+        // request_ids：按 id 序（= 到达序）填充。
+        for req in snapshot.requests {
+            if let Some(entry) = sessions.get_mut(&req.session_id)
+                && !entry.request_ids.contains(&(req.id as u64))
+            {
+                entry.request_ids.push(req.id as u64);
+            }
+        }
+
+        // timeline：按 id 序（= 插入序）填充。
+        for turn in snapshot.turns {
+            let Some(entry) = sessions.get_mut(&turn.session_id) else {
+                continue;
+            };
+            let Ok(content) = serde_json::from_str::<Vec<AiContentBlock>>(&turn.content) else {
+                continue;
+            };
+            entry.timeline.push(TimelineEntry {
+                fingerprint: turn.fingerprint as u64,
+                turn: AiTurn {
+                    role: turn.role,
+                    content,
+                },
+                request_id: turn.request_id as u64,
+            });
+        }
+
+        SessionStore {
+            sessions,
+            max_sessions: max_sessions.max(1),
+            tick: max_tick,
+        }
+    }
 }
 
 fn session_key(scope: &(String, String), header_val: &str) -> String {
     format!("{}|{}|{}", scope.0, scope.1, header_val)
 }
 
-/// 单 turn 指纹：role + content 序列化文本的哈希。
-/// 同会话续轮时客户端原样重发历史，同一输入的序列化输出稳定，
-/// 指纹相等即可代表 turn 相等（碰撞概率可忽略；仅内存态，不持久化）。
+/// 单 turn 指纹：role + content（**忽略 thinking**）序列化文本的哈希。
+/// 忽略 thinking 的原因：客户端回放历史时常剥掉思考内容，计入会让同一 turn
+/// 前后形状不同，导致 LCP 断开、把历史当新数据重复入库/推送。
 pub(crate) fn turn_fingerprint(turn: &AiTurn) -> u64 {
     let mut h = DefaultHasher::new();
     turn.role.hash(&mut h);
-    if let Ok(json) = serde_json::to_string(&turn.content) {
+    // 仅哈希非 thinking 块；thinking 正文不参与等价判定。
+    let comparable: Vec<&AiContentBlock> = turn
+        .content
+        .iter()
+        .filter(|b| !matches!(b, AiContentBlock::Thinking { .. }))
+        .collect();
+    if let Ok(json) = serde_json::to_string(&comparable) {
         json.hash(&mut h);
     }
-    h.finish()
+    // 截断到 53 位：该值会作为前端 turn id 走 JSON，>2^53 在 JS Number 中丢精度。
+    h.finish() & ((1u64 << 53) - 1)
 }
 
 /// `prev` 是否为 `curr` 的非空前缀（逐 turn 指纹比较）。
 pub(crate) fn is_prefix(prev: &[u64], curr: &[u64]) -> bool {
     !prev.is_empty() && prev.len() <= curr.len() && prev == &curr[..prev.len()]
+}
+
+/// 截断 timeline 到上限（保留最新 MAX_TIMELINE 条，丢弃最旧）。
+fn trim_timeline(timeline: &mut Vec<TimelineEntry>) {
+    if timeline.len() > MAX_TIMELINE {
+        let excess = timeline.len() - MAX_TIMELINE;
+        timeline.drain(0..excess);
+    }
 }

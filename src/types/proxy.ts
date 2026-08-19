@@ -1,4 +1,4 @@
-import type { AiConversation, AiTurn, AiUsage } from '@/types/ai'
+import type { AiTimelineTurnDto, AiUsage } from '@/types/ai'
 
 export interface RequestEvent {
   id: number
@@ -59,14 +59,19 @@ export type ProxyEvent =
   | { type: 'response_chunk'; id: number; chunk: string }
   | { type: 'error'; id: number; error: string }
   | {
-      type: 'ai_normalized'
-      id: number
+      type: 'ai_timeline'
       session_id: string
-      provider: string
-      conversation: AiConversation
+      request_id: number
+      /** true = 整条去重 timeline 快照（finalize）；false = 本次请求增量 turns */
+      snapshot: boolean
+      turns: AiTimelineTurnDto[]
       streaming: boolean
-      /** 请求侧归一化 turns（请求体 messages），前端与 assistant 回复拼接为完整对话。 */
-      request_turns?: AiTurn[]
+      model?: string
+      finish_reason?: string
+      first_chunk_ms?: number
+      duration_ms?: number
+      start_ms?: number
+      usage?: AiUsage
     }
   | {
       type: 'ai_session'

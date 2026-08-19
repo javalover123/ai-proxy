@@ -104,7 +104,7 @@ export function serializeFormDataBody(entries: FormDataEntry[]): string {
  * 将编辑器存储的 (bodyType, body) 转为结构化的 RequestBody。
  *
  * - json / xml / text / urlencoded → { mode: "raw", content, language }
- * - multipart / form-data → { mode: "formdata", parts: FormDataPart[] }
+ * - multipart / form-data → { mode: "formData", parts: FormDataPart[] }
  * - body 为空字符串 → null（即无 body）
  *
  * urlencoded 的百分号编码由前端完成（`serializeUrlEncoded`），
@@ -134,7 +134,7 @@ export function buildSendBody(bodyType: BodyType, body: string): RequestBody {
       const parts: FormDataPart[] = parseFormDataBody(body)
         .filter(p => p.enabled !== false && p.key.trim())
         .map(p => ({ key: p.key.trim(), value: p.value, partType: p.type }))
-      return parts.length > 0 ? { mode: 'formdata', parts } : null
+      return parts.length > 0 ? { mode: 'formData', parts } : null
     }
 
     default: // 'text' | 'auto' | 其他

@@ -25,7 +25,7 @@ function TokenValue({ value, className }: { value: number | null | undefined; cl
   if (!isAbbreviated) return <span className={className}>{display}</span>
 
   return (
-    <Tooltip delay={200}>
+    <Tooltip>
       <TooltipTrigger
         render={<span className={cn('cursor-default', className)}>{display}</span>}
       />
@@ -67,10 +67,16 @@ function UsageRows({ usage }: { usage: AiUsage }) {
   const locale = i18n.language?.startsWith('zh') ? 'zh' : 'en'
   return (
     <>
-      <span className="text-muted-foreground">Prompt</span>
-      <span className="text-right font-mono tabular-nums">{formatTokenCount(usage.promptTokens, locale)}</span>
-      <span className="text-muted-foreground">Completion</span>
-      <span className="text-right font-mono tabular-nums">{formatTokenCount(usage.completionTokens, locale)}</span>
+      <span className="text-muted-foreground">Input</span>
+      <span className="text-right font-mono tabular-nums">{formatTokenCount(usage.inputTokens, locale)}</span>
+      <span className="text-muted-foreground">Output</span>
+      <span className="text-right font-mono tabular-nums">{formatTokenCount(usage.outputTokens, locale)}</span>
+      {usage.reasoningTokens != null && (
+        <>
+          <span className="text-muted-foreground">Reasoning</span>
+          <span className="text-right font-mono tabular-nums">{formatTokenCount(usage.reasoningTokens, locale)}</span>
+        </>
+      )}
       {usage.cachedTokens != null && (
         <>
           <span className="text-muted-foreground">Cache Read</span>
@@ -120,11 +126,11 @@ function SessionGroup({
   // 会话模型：取最新一轮已知 model 的请求（流式首轮可能尚未产出 model）
   const model = useMemo(() => {
     for (let i = session.requestIds.length - 1; i >= 0; i--) {
-      const m = session.conversations[session.requestIds[i]]?.model
+      const m = session.requests[session.requestIds[i]]?.model
       if (m) return m
     }
     return undefined
-  }, [session.requestIds, session.conversations])
+  }, [session.requestIds, session.requests])
 
   return (
     <div className="border-b border-border/40">
@@ -150,7 +156,7 @@ function SessionGroup({
                 {expanded ? <ChevronDown className="size-3 flex-shrink-0" /> : <ChevronRight className="size-3 flex-shrink-0" />}
               </span>
               {session.source && (
-                <Tooltip delay={150}>
+                <Tooltip>
                   <TooltipTrigger
                     render={
                       <span className="max-w-24 truncate text-ui-2xs px-1.5 py-0.5 rounded border bg-sky-500/10 text-sky-500 border-sky-500/20 dark:text-sky-400 cursor-default">
@@ -188,7 +194,7 @@ function SessionGroup({
                 {mdSessions[session.sessionId] ? <CodeIcon className="size-3" /> : <TextIcon className="size-3" />}
               </span>
             </div>
-            <Tooltip delay={300}>
+            <Tooltip>
               <TooltipTrigger
                 render={
                   <p className="text-ui-sm text-foreground/80 truncate leading-tight cursor-default">
@@ -222,7 +228,7 @@ function SessionGroup({
         <div className="bg-surface-deep/40">
           {session.requestIds.map((rid, i) => {
             const sel = selection?.sessionId === session.sessionId && selection?.requestId === rid
-            const conv = session.conversations[rid]
+            const conv = session.requests[rid]
             const hasLatency = conv?.firstChunkMs != null || conv?.durationMs != null
             return (
               <ContextMenu key={rid}>
@@ -241,7 +247,7 @@ function SessionGroup({
                       </span>
                       {conv?.model && (
                         <span className="ml-auto">
-                          <Tooltip delay={150}>
+                          <Tooltip>
                             <TooltipTrigger
                               render={
                                 <span className="max-w-20 truncate text-ui-2xs font-semibold px-1 py-px rounded border bg-violet-500/10 text-violet-400 border-violet-500/20 cursor-default">

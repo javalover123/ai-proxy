@@ -3,9 +3,9 @@ use std::sync::{Arc, Mutex};
 
 use bytes::Bytes;
 use rama::error::BoxError;
-use rama::http::Body;
 use rama::http::body::CollectOptions;
 use rama::http::body::util::BodyExt;
+use rama::http::{Body, BodyCaptureEvent, BodyCaptureSink, CaptureBody};
 
 /// body 收集上限（16 MiB）：超过则停止缓冲，剩余部分保持可转发。
 pub(crate) const BODY_CAPTURE_LIMIT: usize = 16 * 1024 * 1024;
@@ -71,42 +71,54 @@ pub(crate) trait BodyObserver: Send + 'static {
     fn on_chunk(&mut self, bytes: &Bytes);
     /// 流正常结束或 body 被 drop（客户端断开）时回调，保证只调一次。
     fn on_eos(&mut self);
+    /// body 在流结束前被 drop（客户端断开/取消转发）时回调；
+    /// 之后仍会调用 [`BodyObserver::on_eos`] 收尾。
+    fn on_aborted(&mut self) {}
 }
 
-/// 逐 chunk 观测 + on_drop 安全兜底骨架：将 body 数据流包裹一层，
-/// 每个 chunk 到达时调 `observer.on_chunk`；流正常结束或 body 被 drop 时
-/// 调 `observer.on_eos`——由 [`Ordering::AcqRel`] 原子标志保证只执行一次。
-///
-/// 内部维护 `Arc<Mutex<Observer>>` 以在 stream future 与 drop guard 间共享，
-/// 调用侧无需关心并发细节。
-pub(crate) fn observe_body(body: Body, observer: impl BodyObserver) -> Body {
-    let inner = Arc::new((Mutex::new(observer), AtomicBool::new(false)));
+struct ObserverSink<O> {
+    state: Arc<(Mutex<O>, AtomicBool)>,
+}
 
-    let stream_state = inner.clone();
-    let drop_state = inner;
-
-    let stream = rama::futures::stream::unfold(
-        (body.into_data_stream(), stream_state),
-        move |(mut ds, st)| async move {
-            match rama::futures::StreamExt::next(&mut ds).await {
-                Some(Ok(bytes)) => {
-                    st.0.lock().expect("observe_body").on_chunk(&bytes);
-                    Some((Ok(bytes), (ds, st)))
-                }
-                Some(Err(err)) => Some((Err(err), (ds, st))),
-                None => {
-                    if !st.1.swap(true, Ordering::AcqRel) {
-                        st.0.lock().expect("observe_body").on_eos();
-                    }
-                    None
-                }
-            }
-        },
-    );
-
-    Body::from_stream(stream).on_drop(move || {
-        if !drop_state.1.swap(true, Ordering::AcqRel) {
-            drop_state.0.lock().expect("observe_body").on_eos();
+fn finish_observer<O: BodyObserver>(state: &(Mutex<O>, AtomicBool), aborted: bool) {
+    if !state.1.swap(true, Ordering::AcqRel) {
+        let mut observer = state.0.lock().expect("observe_body");
+        if aborted {
+            observer.on_aborted();
         }
-    })
+        observer.on_eos();
+    }
+}
+
+impl<O: BodyObserver> BodyCaptureSink for ObserverSink<O> {
+    fn capture(
+        &self,
+        event: BodyCaptureEvent,
+    ) -> impl std::future::Future<Output = ()> + Send + 'static {
+        let state = self.state.clone();
+        async move {
+            match event {
+                BodyCaptureEvent::Frame(frame) => {
+                    if let Some(bytes) = frame.data_ref() {
+                        state.0.lock().expect("observe_body").on_chunk(bytes);
+                    }
+                }
+                BodyCaptureEvent::End(_outcome) => finish_observer(&state, false),
+            }
+        }
+    }
+
+    fn aborted(&self) {
+        finish_observer(&self.state, true);
+    }
+}
+
+/// 逐 chunk 观测骨架：基于 rama 原生 [`CaptureBody`] 流式捕获，无需自行处理
+/// stream 包装与 drop-安全并发样板。每个 chunk 到达时调 `observer.on_chunk`；
+/// 流正常结束、出错或 body 被 drop 时调 `observer.on_eos`（drop 场景先调
+/// `on_aborted`）——由 [`Ordering::AcqRel`] 原子标志保证只执行一次。
+pub(crate) fn observe_body(body: Body, observer: impl BodyObserver) -> Body {
+    let state = Arc::new((Mutex::new(observer), AtomicBool::new(false)));
+    let sink = ObserverSink { state };
+    Body::new(CaptureBody::new(body, sink))
 }

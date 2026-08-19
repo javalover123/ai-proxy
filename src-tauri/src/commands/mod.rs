@@ -1,10 +1,12 @@
 pub mod open_url;
 pub use open_url::open_url;
+mod ai;
 mod collection;
 mod locale;
 mod proxy;
 mod resend;
 mod settings;
+pub use ai::{get_ai_session, get_ai_thinking, list_ai_sessions};
 pub use collection::{
     create_collection, create_folder, create_request, delete_node, duplicate_request,
     get_collections, move_node, rename_node, save_request,

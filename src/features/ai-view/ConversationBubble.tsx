@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { invoke } from '@tauri-apps/api/core'
 import { useTranslation } from 'react-i18next'
 import { ChevronRight, ChevronDown, WrenchIcon, FileTextIcon, ExternalLinkIcon, CodeIcon, TextIcon, BrainIcon } from 'lucide-react'
 import { type AiTurn, type AiContentBlock } from '@/types/ai'
@@ -40,6 +41,12 @@ interface ConversationBubbleProps {
   onJump?: () => void
   /** 会话级默认视图：raw 原文（默认）/ md 渲染 */
   defaultView?: 'md' | 'raw'
+  /** thinking 按需取：会话 id（有值时才能取） */
+  sessionId?: string
+  /** thinking 按需取：请求 id */
+  requestId?: number
+  /** thinking 按需取：turn 的稳定 id（已定稿才有） */
+  fingerprint?: number
 }
 
 /** 顶层 text block：检测命中且当前视图为 md 时走 Markdown 渲染；
@@ -84,31 +91,49 @@ function TextBlock({ text, showMd, inverted }: { text: string; showMd: boolean; 
 }
 
 /** 单个 content block 的渲染 */
-function ContentBlock({ block, showMd, headerActions }: { block: AiContentBlock; showMd: boolean; headerActions?: React.ReactNode }) {
+function ContentBlock({
+  block,
+  showMd,
+  headerActions,
+  fetchedThinkingText,
+  onLoadThinking,
+  thinkingLoading,
+}: {
+  block: AiContentBlock
+  showMd: boolean
+  headerActions?: React.ReactNode
+  /** thinking 按需取：该块对应的正文（已拉取则非空）。 */
+  fetchedThinkingText?: string
+  /** thinking 按需取：展开且无正文时触发拉取。 */
+  onLoadThinking?: () => void
+  thinkingLoading?: boolean
+}) {
   const { t } = useTranslation()
   const [expanded, setExpanded] = useState(false)
-
-  const thinkingIsMd = useMemo(() => {
-    if (block.type !== 'thinking') return false
-    return isLikelyMarkdown(block.text)
-  }, [block.type === 'thinking' ? block.text : '', block.type])
 
   if (block.type === 'text') {
     return <TextBlock text={block.text} showMd={showMd} inverted={false} />
   }
 
   if (block.type === 'thinking') {
+    const displayText = fetchedThinkingText ?? block.text
+    const isEmpty = displayText === ''
+    const isMd = isLikelyMarkdown(displayText)
     return (
       <div className="mt-1.5 rounded-lg border border-sky-500/20 bg-sky-500/5 overflow-hidden">
         <button
           className="flex w-full items-center gap-1.5 px-2.5 py-1.5 text-left text-ui-sm font-medium text-sky-600 dark:text-sky-400 hover:bg-sky-500/10 transition-colors"
-          onClick={() => setExpanded(!expanded)}
+          onClick={() => {
+            const next = !expanded
+            setExpanded(next)
+            if (next && isEmpty && onLoadThinking) onLoadThinking()
+          }}
         >
           {expanded ? <ChevronDown className="size-3 flex-shrink-0" /> : <ChevronRight className="size-3 flex-shrink-0" />}
           <BrainIcon className="size-3 flex-shrink-0" />
           <span className="truncate flex-1">{t('aiView.thinking', '思考过程')}</span>
           <CopyButton
-            text={block.type === 'thinking' ? block.text : ''}
+            text={displayText}
             size="xs"
             className="inline-flex items-center p-0.5 rounded opacity-50 hover:opacity-100 transition-opacity cursor-pointer hover:bg-foreground/5"
           />
@@ -116,10 +141,16 @@ function ContentBlock({ block, showMd, headerActions }: { block: AiContentBlock;
         </button>
         {expanded && (
           <div className="max-h-48 overflow-y-auto border-t border-sky-500/15 px-3 py-2 text-prose-sm text-foreground/70">
-            {showMd && thinkingIsMd ? (
-              <MarkdownContent text={block.text} variant="default" />
+            {isEmpty ? (
+              <span className="text-muted-foreground/60">
+                {thinkingLoading
+                  ? t('aiView.thinkingLoading', '加载中…')
+                  : t('aiView.thinkingEmpty', '思考内容定稿后可查看')}
+              </span>
+            ) : showMd && isMd ? (
+              <MarkdownContent text={displayText} variant="default" />
             ) : (
-              <span className="whitespace-pre-wrap break-words">{block.text}</span>
+              <span className="whitespace-pre-wrap break-words">{displayText}</span>
             )}
           </div>
         )}
@@ -209,7 +240,7 @@ function ToolTurn({ turn, showMd }: { turn: AiTurn; showMd: boolean }) {
 }
 
 /** 对话气泡：role 决定对齐与配色，内部渲染 content blocks */
-export function ConversationBubble({ turn, isStreaming, reqLabel, onJump, defaultView = 'raw' }: ConversationBubbleProps) {
+export function ConversationBubble({ turn, isStreaming, reqLabel, onJump, defaultView = 'raw', sessionId, requestId, fingerprint }: ConversationBubbleProps) {
   const { t } = useTranslation()
   const [toolsExpanded, setToolsExpanded] = useState(false)
   const [systemExpanded, setSystemExpanded] = useState(false)
@@ -232,6 +263,30 @@ export function ConversationBubble({ turn, isStreaming, reqLabel, onJump, defaul
   const view = override ?? defaultView
   const showMd = mdCapable && view === 'md'
   const contentRef = useRef<HTMLDivElement>(null)
+
+  // thinking 按需取：turn 级拉取一次，按出现顺序填充各 thinking 块。
+  const [thinkingTexts, setThinkingTexts] = useState<string[] | null>(null)
+  const [thinkingLoading, setThinkingLoading] = useState(false)
+  const loadThinking = () => {
+    if (thinkingTexts !== null || thinkingLoading) return
+    if (sessionId == null || requestId == null || fingerprint == null) return
+    setThinkingLoading(true)
+    invoke<string[]>('get_ai_thinking', { sessionId, requestId, fingerprint })
+      .then((texts) => setThinkingTexts(texts))
+      .catch(() => setThinkingTexts([]))
+      .finally(() => setThinkingLoading(false))
+  }
+  const thinkingOrdinals = useMemo(() => {
+    const m = new Map<number, number>()
+    let n = 0
+    turn.content.forEach((b, i) => {
+      if (b.type === 'thinking') {
+        m.set(i, n)
+        n++
+      }
+    })
+    return m
+  }, [turn])
 
   const copyText = useMemo(() => {
     if (showMd && contentRef.current) {
@@ -418,13 +473,26 @@ export function ConversationBubble({ turn, isStreaming, reqLabel, onJump, defaul
           <ToolTurn turn={turn} showMd={showMd} />
         ) : (
           <div ref={contentRef}>
-            {turn.content.map((block, j) =>
-              block.type === 'text' ? (
-                <TextBlock key={j} text={block.text} showMd={showMd} inverted={isUser} />
-              ) : (
-                <ContentBlock key={j} block={block} showMd={showMd} headerActions={j === 0 ? headerActions : undefined} />
-              ),
-            )}
+            {turn.content.map((block, j) => {
+              if (block.type === 'text') {
+                return <TextBlock key={j} text={block.text} showMd={showMd} inverted={isUser} />
+              }
+              if (block.type === 'thinking') {
+                const ordinal = thinkingOrdinals.get(j) ?? 0
+                return (
+                  <ContentBlock
+                    key={j}
+                    block={block}
+                    showMd={showMd}
+                    headerActions={j === 0 ? headerActions : undefined}
+                    fetchedThinkingText={thinkingTexts?.[ordinal]}
+                    onLoadThinking={loadThinking}
+                    thinkingLoading={thinkingLoading}
+                  />
+                )
+              }
+              return <ContentBlock key={j} block={block} showMd={showMd} headerActions={j === 0 ? headerActions : undefined} />
+            })}
             {isStreaming && turn.role === 'assistant' && (
               <span className="animate-pulse">▌</span>
             )}
