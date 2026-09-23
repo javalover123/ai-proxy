@@ -1,32 +1,32 @@
-import { useRef } from 'react'
-import { ShieldMinusIcon } from 'lucide-react'
+import { ShieldMinusIcon } from "lucide-react";
+import { useRef } from "react";
 import {
-  LayoutSidebarOn,
-  LayoutSidebarOff,
-  LayoutBottomOn,
   LayoutBottomOff,
-  LayoutRightOn,
+  LayoutBottomOn,
   LayoutRightOff,
+  LayoutRightOn,
+  LayoutSidebarOff,
+  LayoutSidebarOn,
   ScriptIcon,
-} from '@/components/icons'
-import { useLocale } from '@/hooks/useLocale'
-import { cn } from '@/lib/utils'
-import { Separator } from '@/components/ui/separator'
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+} from "@/components/icons";
+import { Separator } from "@/components/ui/separator";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useLocale } from "@/hooks/useLocale";
+import { cn } from "@/lib/utils";
 
-export type DetailPosition = 'bottom' | 'right' | 'hidden'
+export type DetailPosition = "bottom" | "right" | "hidden";
 
 interface BottomBarProps {
-  showSidebar: boolean
-  onToggleSidebar: () => void
-  detailPosition: DetailPosition
-  onToggleDetailPosition: (next: DetailPosition) => void
-  scriptEnabled: boolean
-  onToggleScript: () => void
-  sslEnabled: boolean
-  onToggleSsl: () => void
-  aiEnabled: boolean
-  onToggleAi: () => void
+  showSidebar: boolean;
+  onToggleSidebar: () => void;
+  detailPosition: DetailPosition;
+  onToggleDetailPosition: (next: DetailPosition) => void;
+  scriptEnabled: boolean;
+  onToggleScript: () => void;
+  sslEnabled: boolean;
+  onToggleSsl: () => void;
+  aiEnabled: boolean;
+  onToggleAi: () => void;
 }
 
 export function BottomBar({
@@ -41,25 +41,25 @@ export function BottomBar({
   aiEnabled,
   onToggleAi,
 }: BottomBarProps) {
-  const { t } = useLocale()
-  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const { t } = useLocale();
+  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const DetailIconOn = detailPosition === 'bottom' ? LayoutBottomOn : LayoutRightOn
-  const DetailIconOff = detailPosition === 'bottom' ? LayoutBottomOff : LayoutRightOff
-  const detailTitleKey = detailPosition === 'bottom' ? 'layout.detailBottom' : 'layout.detailRight'
+  const DetailIconOn = detailPosition === "bottom" ? LayoutBottomOn : LayoutRightOn;
+  const DetailIconOff = detailPosition === "bottom" ? LayoutBottomOff : LayoutRightOff;
+  const detailTitleKey = detailPosition === "bottom" ? "layout.detailBottom" : "layout.detailRight";
 
   function handleDetailClick() {
     if (clickTimerRef.current) {
-      clearTimeout(clickTimerRef.current)
-      clickTimerRef.current = null
-      onToggleDetailPosition('hidden')
+      clearTimeout(clickTimerRef.current);
+      clickTimerRef.current = null;
+      onToggleDetailPosition("hidden");
     } else {
       clickTimerRef.current = setTimeout(() => {
-        clickTimerRef.current = null
+        clickTimerRef.current = null;
         onToggleDetailPosition(
-          detailPosition === 'hidden' ? 'bottom' : detailPosition === 'bottom' ? 'right' : 'bottom'
-        )
-      }, 250)
+          detailPosition === "hidden" ? "bottom" : detailPosition === "bottom" ? "right" : "bottom",
+        );
+      }, 250);
     }
   }
 
@@ -67,32 +67,26 @@ export function BottomBar({
     <div className="flex h-7 shrink-0 items-center bg-surface-deep select-none px-2 relative">
       <Separator orientation="horizontal" className="absolute top-0 left-0 right-0" />
       {/* Left: host sidebar toggle */}
-<Tooltip>
-          <TooltipTrigger render={<span className="inline-flex" />}>
-            <button
-              type="button"
-              onClick={onToggleSidebar}
-              className={cn(
-                'relative inline-flex h-[22px] w-[26px] items-center justify-center rounded-md transition-colors',
-                showSidebar
-                  ? 'bg-surface-elevated text-foreground'
-                  : 'text-muted-foreground hover:bg-surface-elevated/50 hover:text-foreground'
-              )}
-            >
-              {showSidebar && (
-                <span className="absolute bottom-0 left-1 right-1 h-[2px] rounded-full bg-foreground/70" />
-              )}
-              {showSidebar ? (
-                <LayoutSidebarOn className="size-4" />
-              ) : (
-                <LayoutSidebarOff className="size-4" />
-              )}
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="top" className="bg-popover text-popover-foreground text-ui-sm">
-            {t('layout.hostSidebar')}
-          </TooltipContent>
-        </Tooltip>
+      <Tooltip>
+        <TooltipTrigger render={<span className="inline-flex" />}>
+          <button
+            type="button"
+            onClick={onToggleSidebar}
+            className={cn(
+              "relative inline-flex h-[22px] w-[26px] items-center justify-center rounded-md transition-colors",
+              showSidebar
+                ? "bg-surface-elevated text-foreground"
+                : "text-muted-foreground hover:bg-surface-elevated/50 hover:text-foreground",
+            )}
+          >
+            {showSidebar && <span className="absolute bottom-0 left-1 right-1 h-[2px] rounded-full bg-foreground/70" />}
+            {showSidebar ? <LayoutSidebarOn className="size-4" /> : <LayoutSidebarOff className="size-4" />}
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="bg-popover text-popover-foreground text-ui-sm">
+          {t("layout.hostSidebar")}
+        </TooltipContent>
+      </Tooltip>
 
       {/* Spacer */}
       <div className="flex-1" />
@@ -102,15 +96,13 @@ export function BottomBar({
         type="button"
         onClick={onToggleScript}
         className={cn(
-          'relative inline-flex h-[22px] w-[26px] items-center justify-center rounded-md transition-colors',
+          "relative inline-flex h-[22px] w-[26px] items-center justify-center rounded-md transition-colors",
           scriptEnabled
-            ? 'bg-emerald-500/15 text-emerald-400'
-            : 'text-muted-foreground hover:bg-surface-elevated/50 hover:text-foreground'
+            ? "bg-emerald-500/15 text-emerald-400"
+            : "text-muted-foreground hover:bg-surface-elevated/50 hover:text-foreground",
         )}
       >
-        {scriptEnabled && (
-          <span className="absolute bottom-0 left-1 right-1 h-[2px] rounded-full bg-emerald-400/70" />
-        )}
+        {scriptEnabled && <span className="absolute bottom-0 left-1 right-1 h-[2px] rounded-full bg-emerald-400/70" />}
         <ScriptIcon className="size-4" />
       </button>
 
@@ -119,15 +111,13 @@ export function BottomBar({
         type="button"
         onClick={onToggleSsl}
         className={cn(
-          'relative inline-flex h-[22px] w-[26px] items-center justify-center rounded-md transition-colors',
+          "relative inline-flex h-[22px] w-[26px] items-center justify-center rounded-md transition-colors",
           sslEnabled
-            ? 'bg-emerald-500/15 text-emerald-400'
-            : 'text-muted-foreground hover:bg-surface-elevated/50 hover:text-foreground'
+            ? "bg-emerald-500/15 text-emerald-400"
+            : "text-muted-foreground hover:bg-surface-elevated/50 hover:text-foreground",
         )}
       >
-        {sslEnabled && (
-          <span className="absolute bottom-0 left-1 right-1 h-[2px] rounded-full bg-emerald-400/70" />
-        )}
+        {sslEnabled && <span className="absolute bottom-0 left-1 right-1 h-[2px] rounded-full bg-emerald-400/70" />}
         <ShieldMinusIcon className="size-4" />
       </button>
 
@@ -136,15 +126,13 @@ export function BottomBar({
         type="button"
         onClick={onToggleAi}
         className={cn(
-          'relative inline-flex h-[22px] w-[26px] items-center justify-center rounded-md transition-colors',
+          "relative inline-flex h-[22px] w-[26px] items-center justify-center rounded-md transition-colors",
           aiEnabled
-            ? 'bg-violet-500/15 text-violet-400'
-            : 'text-muted-foreground hover:bg-surface-elevated/50 hover:text-foreground'
+            ? "bg-violet-500/15 text-violet-400"
+            : "text-muted-foreground hover:bg-surface-elevated/50 hover:text-foreground",
         )}
       >
-        {aiEnabled && (
-          <span className="absolute bottom-0 left-1 right-1 h-[2px] rounded-full bg-violet-400/70" />
-        )}
+        {aiEnabled && <span className="absolute bottom-0 left-1 right-1 h-[2px] rounded-full bg-violet-400/70" />}
         <svg
           className="size-4"
           viewBox="0 0 24 24"
@@ -167,20 +155,16 @@ export function BottomBar({
             type="button"
             onClick={handleDetailClick}
             className={cn(
-              'relative inline-flex h-[22px] w-[26px] items-center justify-center rounded-md transition-colors',
-              detailPosition !== 'hidden'
-                ? 'bg-surface-elevated text-foreground'
-                : 'text-muted-foreground hover:bg-surface-elevated/50 hover:text-foreground'
+              "relative inline-flex h-[22px] w-[26px] items-center justify-center rounded-md transition-colors",
+              detailPosition !== "hidden"
+                ? "bg-surface-elevated text-foreground"
+                : "text-muted-foreground hover:bg-surface-elevated/50 hover:text-foreground",
             )}
           >
-            {detailPosition !== 'hidden' && (
-          <span className="absolute bottom-0 left-1 right-1 h-[2px] rounded-full bg-foreground/70" />
-        )}
-            {detailPosition !== 'hidden' ? (
-              <DetailIconOn className="size-4" />
-            ) : (
-              <DetailIconOff className="size-4" />
+            {detailPosition !== "hidden" && (
+              <span className="absolute bottom-0 left-1 right-1 h-[2px] rounded-full bg-foreground/70" />
             )}
+            {detailPosition !== "hidden" ? <DetailIconOn className="size-4" /> : <DetailIconOff className="size-4" />}
           </button>
         </TooltipTrigger>
         <TooltipContent side="top" className="bg-popover text-popover-foreground text-ui-sm">
@@ -188,5 +172,5 @@ export function BottomBar({
         </TooltipContent>
       </Tooltip>
     </div>
-  )
+  );
 }

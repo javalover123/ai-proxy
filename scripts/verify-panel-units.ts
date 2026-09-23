@@ -14,13 +14,19 @@ function bt(e) {
       return [e, "px"];
     case "string": {
       const t = parseFloat(e);
-      return e.endsWith("%") ? [t, "%"]
-        : e.endsWith("px") ? [t, "px"]
-        : e.endsWith("rem") ? [t, "rem"]
-        : e.endsWith("em") ? [t, "em"]
-        : e.endsWith("vh") ? [t, "vh"]
-        : e.endsWith("vw") ? [t, "vw"]
-        : [t, "%"]; // <- no-suffix string defaults to "%"
+      return e.endsWith("%")
+        ? [t, "%"]
+        : e.endsWith("px")
+          ? [t, "px"]
+          : e.endsWith("rem")
+            ? [t, "rem"]
+            : e.endsWith("em")
+              ? [t, "em"]
+              : e.endsWith("vh")
+                ? [t, "vh"]
+                : e.endsWith("vw")
+                  ? [t, "vw"]
+                  : [t, "%"]; // <- no-suffix string defaults to "%"
     }
   }
 }
@@ -29,8 +35,10 @@ function bt(e) {
 function ie(groupSize, styleProp) {
   const [i, r] = bt(styleProp);
   switch (r) {
-    case "%": return i / 100 * groupSize;
-    case "px": return i;
+    case "%":
+      return (i / 100) * groupSize;
+    case "px":
+      return i;
   }
   return i; // fallback (not exercised here)
 }
@@ -38,7 +46,7 @@ function ie(groupSize, styleProp) {
 // Convert a size prop to its percentage-of-group value (mirrors ve())
 function toPct(groupSize, styleProp) {
   if (styleProp === undefined) return undefined;
-  return O(ie(groupSize, styleProp) / groupSize * 100);
+  return O((ie(groupSize, styleProp) / groupSize) * 100);
 }
 
 // One pass of the library's U() normalization: scale defaults to sum 100,
@@ -46,21 +54,21 @@ function toPct(groupSize, styleProp) {
 // then redistribute leftover. Faithful enough to expose the bug.
 function computeLayout(groupHeight, panels) {
   // defaults -> pct
-  let sizes = panels.map(p => toPct(groupHeight, p.defaultSize));
+  let sizes = panels.map((p) => toPct(groupHeight, p.defaultSize));
   // fill missing defaults equally
-  const defined = sizes.filter(s => s !== undefined);
+  const defined = sizes.filter((s) => s !== undefined);
   const defSum = defined.reduce((a, b) => a + b, 0);
-  sizes = sizes.map(s => s === undefined ? (100 - defSum) / (panels.length - defined.length) : s);
+  sizes = sizes.map((s) => (s === undefined ? (100 - defSum) / (panels.length - defined.length) : s));
   // scale to sum 100
   const sum = sizes.reduce((a, b) => a + b, 0);
-  if (Math.abs(sum - 100) > 0.1) sizes = sizes.map(s => (100 / sum) * s);
+  if (Math.abs(sum - 100) > 0.1) sizes = sizes.map((s) => (100 / sum) * s);
   // clamp
   let leftover = 0;
   sizes = sizes.map((s, i) => {
     const p = panels[i];
     const min = toPct(groupHeight, p.minSize) ?? 0;
     const max = toPct(groupHeight, p.maxSize) ?? 100;
-    let clamped = Math.max(min, Math.min(max, s));
+    const clamped = Math.max(min, Math.min(max, s));
     leftover += s - clamped;
     return clamped;
   });
@@ -70,7 +78,7 @@ function computeLayout(groupHeight, panels) {
       const p = panels[i];
       const min = toPct(groupHeight, p.minSize) ?? 0;
       const max = toPct(groupHeight, p.maxSize) ?? 100;
-      const room = leftover > 0 ? (max - sizes[i]) : (sizes[i] - min);
+      const room = leftover > 0 ? max - sizes[i] : sizes[i] - min;
       const delta = Math.sign(leftover) * Math.min(Math.abs(leftover), Math.max(0, room));
       if (delta !== 0 && !Number.isNaN(delta)) {
         sizes[i] += delta;
@@ -85,11 +93,11 @@ const GROUP = 550; // typical vertical group height in px
 
 const configs = {
   "OLD (numbers, HEAD-ish + uncommitted)": {
-    editor:   { defaultSize: 60,  minSize: 15, maxSize: 80 },
-    response: { defaultSize: 40,  minSize: 10, maxSize: undefined, collapsible: true, collapsedSize: 0 },
+    editor: { defaultSize: 60, minSize: 15, maxSize: 80 },
+    response: { defaultSize: 40, minSize: 10, maxSize: undefined, collapsible: true, collapsedSize: 0 },
   },
   "NEW (% strings, fixed)": {
-    editor:   { defaultSize: "60%", minSize: "15%", maxSize: "80%" },
+    editor: { defaultSize: "60%", minSize: "15%", maxSize: "80%" },
     response: { defaultSize: "40%", minSize: "10%", maxSize: undefined, collapsible: true, collapsedSize: "0%" },
   },
 };
@@ -99,9 +107,11 @@ for (const [name, cfg] of Object.entries(configs)) {
   // show parsed percentages of each constraint
   console.log(`\n=== ${name} (group=${GROUP}px) ===`);
   for (const p of panels) {
-    console.log(`  defaultSize=${String(p.defaultSize).padEnd(6)} -> ${toPct(GROUP, p.defaultSize)}% | ` +
-      `minSize=${String(p.minSize).padEnd(5)} -> ${toPct(GROUP, p.minSize)}% | ` +
-      `maxSize=${String(p.maxSize).padEnd(6)} -> ${toPct(GROUP, p.maxSize)}%`);
+    console.log(
+      `  defaultSize=${String(p.defaultSize).padEnd(6)} -> ${toPct(GROUP, p.defaultSize)}% | ` +
+        `minSize=${String(p.minSize).padEnd(5)} -> ${toPct(GROUP, p.minSize)}% | ` +
+        `maxSize=${String(p.maxSize).padEnd(6)} -> ${toPct(GROUP, p.maxSize)}%`,
+    );
   }
   const [ed, rs] = computeLayout(GROUP, panels);
   console.log(`  -> editor=${ed}%  response=${rs}%`);

@@ -1,5 +1,5 @@
 interface Props {
-  className?: string
+  className?: string;
 }
 
 export function ScriptIcon({ className }: Props) {
@@ -18,5 +18,5 @@ export function ScriptIcon({ className }: Props) {
       <line x1="10" y1="8" x2="14" y2="8" />
       <line x1="10" y1="16" x2="14" y2="16" />
     </svg>
-  )
+  );
 }

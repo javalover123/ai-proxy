@@ -5,7 +5,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-/// 内容块：文本 / 思考 / 工具调用 / 工具结果。
+/// 内容块：文本 / 思考 / 工具调用 / 工具结果 / 工具定义。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub(crate) enum AiContentBlock {
@@ -27,6 +27,34 @@ pub(crate) enum AiContentBlock {
         tool_use_id: String,
         content: Vec<AiContentBlock>,
     },
+    /// 请求 `tools[]` 的归一化定义列表。只出现在 `tools_def` 伪 turn 里，
+    /// 且该 turn 恒为单块（见 [`AiTurn::tool_defs`]）。
+    ToolDefs {
+        tools: Vec<AiToolDef>,
+    },
+}
+
+/// 单个工具定义。四家 provider 的 `tools[]` 形状互不兼容，函数工具归一到
+/// `Function`，其余（provider 内置工具）原样落 `Raw`——形状无法归一，
+/// 但不丢弃，与 `[ai-coverage]` 同一原则：看不懂的暴露出来，别静默丢。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub(crate) enum AiToolDef {
+    /// 函数工具。`parameters` 为 JSON Schema，三家键名不同但值同构：
+    /// Anthropic `input_schema` / OpenAI `parameters` / Gemini `parametersJsonSchema`
+    /// （Gemini 旧版 `parameters` 是 OpenAPI 3.0 子集方言，此处不做方言转换）。
+    Function {
+        name: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        description: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        parameters: Option<Value>,
+    },
+    /// 无法识别为函数工具的项，原样保留：
+    /// Anthropic `{type:"web_search_20250305", max_uses:5}`、
+    /// OpenAI `{type:"code_interpreter"}` / `{type:"mcp", server_url}`、
+    /// Gemini `{googleSearch:{}}` / `{codeExecution:{}}`。
+    Raw { json: Value },
 }
 
 impl AiContentBlock {
@@ -54,13 +82,49 @@ impl AiTurn {
         }
     }
 
-    /// tools[] 定义 turn（序列化为 JSON 文本）；空数组返回 None。
-    pub(crate) fn tools_def(tools: &[Value]) -> Option<AiTurn> {
+    /// tools[] 定义 turn（恒为单个 [`AiContentBlock::ToolDefs`] 块）；空列表返回 None。
+    /// 保持伪 role turn 形态是为了继续复用现有管线：指纹、LCP 增量、落库、
+    /// 时间线推送全部免费继承，会话中途增删工具自然表现为新 turn。
+    pub(crate) fn tool_defs(tools: Vec<AiToolDef>) -> Option<AiTurn> {
         if tools.is_empty() {
             return None;
         }
-        let json = serde_json::to_string(tools).unwrap_or_default();
-        Some(AiTurn::new("tools_def", vec![AiContentBlock::text(json)]))
+        Some(AiTurn::new(
+            "tools_def",
+            vec![AiContentBlock::ToolDefs { tools }],
+        ))
+    }
+}
+
+/// `Value` → 非空字符串（缺失 / 空串 / 非字符串都归 None）。工具描述等可选文本字段用。
+pub(crate) fn opt_string(v: Option<&Value>) -> Option<String> {
+    v.and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+}
+
+/// OpenAI 系单个工具项 → [`AiToolDef`]。Chat Completions 是
+/// `{type:"function", function:{name, description, parameters}}` 嵌套一层，
+/// Responses 是 `{type:"function", name, description, parameters}` 平铺；
+/// 除嵌套层级外键名完全一致，故两个协议共用此函数。
+///
+/// `type` 非 `function`（`code_interpreter` / `mcp` / `custom` / `web_search_preview` …）
+/// 一律落 `Raw`：这些内置工具各带自己的配置字段，塞进 `Function` 会丢掉它们。
+pub(crate) fn openai_tool_def(v: &Value) -> AiToolDef {
+    match v.get("type").and_then(Value::as_str) {
+        // 缺 type 时按函数工具尝试（API 要求带 type，但代理要容忍不规范客户端）
+        None | Some("function") => {}
+        Some(_) => return AiToolDef::Raw { json: v.clone() },
+    }
+    let inner = v.get("function").unwrap_or(v);
+    match inner.get("name").and_then(Value::as_str) {
+        Some(name) if !name.is_empty() => AiToolDef::Function {
+            name: name.to_string(),
+            description: opt_string(inner.get("description")),
+            parameters: inner.get("parameters").cloned(),
+        },
+        _ => AiToolDef::Raw { json: v.clone() },
     }
 }
 

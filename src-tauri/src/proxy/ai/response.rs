@@ -113,12 +113,22 @@ impl AiState {
             snap.start_ms = Some(self.start_ms);
             snap.first_chunk_ms = first_chunk_at.map(|at| (at - self.start_ms).max(0) as u64);
             let turns = self.delta_turns(request_id, &snap.turns);
-            emit_ai_timeline(sender, &self.session_id, request_id, false, turns, &snap);
+            emit_ai_timeline(
+                sender,
+                &self.session_id,
+                request_id,
+                false,
+                turns,
+                &snap,
+                None,
+            );
         }
     }
 
     /// EOS 收尾：流式 finalize + 快照 / 非流式 JSON 解析 → 覆盖率 → emit + commit。
     /// `body_buf` 仅在非流式路径有效。
+    /// `terminated` 非 `None` 表示流异常终止（`"error"` / `"aborted"`），此时不得
+    /// 替上游补写终止符，也不得声称这是一次干净完成。
     pub(crate) fn finalize(
         self,
         request_id: u64,
@@ -126,11 +136,21 @@ impl AiState {
         first_chunk_at: Option<i64>,
         sender: &Option<Channel<ProxyEvent>>,
         body_buf: Option<String>,
+        mut terminated: Option<&'static str>,
     ) {
         let (raw_keys, conv) = match self.stream_state {
             Some(mut state) => {
-                state.finalize();
+                // 传输层正常时交给 provider 定稿并汇报协议级终止原因（如没收到
+                // `message_stop`、或中途 `event: error`）；传输层已异常
+                // （error/aborted）则保留其 verdict，跳过 finalize。
+                if terminated.is_none() {
+                    terminated = state.finalize();
+                }
                 let mut snap = state.snapshot();
+                // 各 provider 的 `streaming` 语义是「尚未收尾」（`!done`），跳过
+                // finalize 后它会一直是 true。请求确实结束了——只是结束得不干净，
+                // 由 `terminated` 表达，别让前端一直挂着流式光标。
+                snap.streaming = false;
                 snap.first_chunk_ms = first_chunk_at.map(|at| (at - self.start_ms).max(0) as u64);
                 (Some(self.raw_keys), Some(snap))
             }
@@ -145,7 +165,12 @@ impl AiState {
                                  (status {status}, {} bytes)",
                                 buf.len()
                             );
-                            Some(fallback_conversation(self.provider, &buf, status))
+                            Some(fallback_conversation(
+                                self.provider,
+                                &buf,
+                                status,
+                                terminated,
+                            ))
                         });
                         (Some(raw_keys), conv)
                     }
@@ -157,7 +182,12 @@ impl AiState {
                         );
                         (
                             None,
-                            Some(fallback_conversation(self.provider, &buf, status)),
+                            Some(fallback_conversation(
+                                self.provider,
+                                &buf,
+                                status,
+                                terminated,
+                            )),
                         )
                     }
                 };
@@ -222,6 +252,7 @@ impl AiState {
                 true,
                 snapshot_turns,
                 &conv,
+                terminated,
             );
             commit_ai_final(sender, &self.sessions, request_id, &self.session_id, &conv);
 
@@ -234,6 +265,7 @@ impl AiState {
                     streaming: conv.streaming as i64,
                     model: conv.model.clone(),
                     finish_reason: conv.finish_reason.clone(),
+                    terminated: terminated.map(str::to_owned),
                     first_chunk_ms: conv.first_chunk_ms.map(|v| v as i64),
                     duration_ms: conv.duration_ms.map(|v| v as i64),
                     input_tokens: usage.and_then(|u| u.input_tokens).map(|v| v as i64),
@@ -293,6 +325,7 @@ pub(crate) fn emit_ai_timeline(
     snapshot: bool,
     turns: Vec<AiTimelineTurnDto>,
     conv: &AiConversation,
+    terminated: Option<&str>,
 ) {
     if let Some(ch) = sender {
         let _ = ch.send(ProxyEvent::AiTimeline {
@@ -303,6 +336,7 @@ pub(crate) fn emit_ai_timeline(
             streaming: conv.streaming,
             model: conv.model.clone(),
             finish_reason: conv.finish_reason.clone(),
+            terminated: terminated.map(str::to_owned),
             first_chunk_ms: conv.first_chunk_ms,
             duration_ms: conv.duration_ms,
             start_ms: conv.start_ms,
@@ -345,7 +379,16 @@ fn commit_ai_final(
     }
 }
 
-fn fallback_conversation(provider: Provider, body: &str, status: u16) -> AiConversation {
+/// 无法解析时的兜底会话：把 body 前缀当作 assistant 文本。
+///
+/// `terminated` 非 `None` 时不再合成 `http_<status>` 作为 finish_reason——流是断的，
+/// 声称"以 status 收尾"就是把截断说成正常完成；真实终止原因由 `terminated` 携带。
+fn fallback_conversation(
+    provider: Provider,
+    body: &str,
+    status: u16,
+    terminated: Option<&str>,
+) -> AiConversation {
     let mut end = body.len().min(AI_FALLBACK_TEXT_LIMIT);
     while !body.is_char_boundary(end) {
         end -= 1;
@@ -359,7 +402,7 @@ fn fallback_conversation(provider: Provider, body: &str, status: u16) -> AiConve
         false,
         None,
         None,
-        Some(format!("http_{status}")),
+        terminated.is_none().then(|| format!("http_{status}")),
     )
 }
 

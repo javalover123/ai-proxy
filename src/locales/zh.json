@@ -72,6 +72,14 @@
     "mergeFormatOpenai": "OpenAI",
     "mergeFormatAnthropic": "Anthropic",
     "errorStatus": "错误",
+    "terminated": {
+      "error": "响应中断",
+      "aborted": "未读完"
+    },
+    "terminatedHint": {
+      "error": "上游流在结束前出错，这里记录的响应体是残缺前缀，不是完整响应。",
+      "aborted": "响应体在流结束前被关闭（下游断开或取消转发），不一定意味着数据缺失。"
+    },
     "console": "控制台",
     "noConsole": "控制台无输出",
     "decryptPrompt": "此请求未解密，无法查看响应内容。",
@@ -88,7 +96,10 @@
     "proxyTab": "代理",
     "listenHost": "监听地址",
     "listenPort": "监听端口",
-    "upstreamProxy": "上游请求使用系统代理",
+    "upstreamProxyHost": "上游代理",
+    "upstreamProxyPort": "代理端口",
+    "upstreamProxyHostPlaceholder": "留空则直连",
+    "upstreamProxyHint": "上游请求经该代理转发；关闭复选框或留空地址则直连。仅对已解密的流量生效。",
     "theme": "主题",
     "language": "语言",
     "proseFontSize": "内容字号",
@@ -253,6 +264,14 @@
   },
   "aiView": {
     "waiting": "等待归一化数据…",
+    "terminated": {
+      "error": "响应流中断，内容不完整",
+      "aborted": "响应未读完，内容可能不完整"
+    },
+    "terminatedHint": {
+      "error": "上游流在结束前出错，这一轮记录到的内容是残缺前缀。",
+      "aborted": "响应体在流结束前被关闭（下游断开或取消转发），不一定意味着数据缺失。"
+    },
     "jumpToProxy": "在代理中查看",
     "copyCurl": "复制 cURL",
     "thinking": "思考过程",
@@ -264,8 +283,17 @@
     "toolCallResult": "结果",
     "toolCallExpandAll": "展开全部",
     "toolCallCollapse": "收起",
+    "toolDefBuiltin": "内置",
+    "toolDefsRawJson": "查看原始 JSON",
     "importToEditor": "导入编辑",
-    "toolCallsSummary": "{{count}} 次调用 · {{reqs}} 次请求"
+    "toolCallsSummary": "{{count}} 次调用 · {{reqs}} 次请求",
+    "openLinkTitle": "打开外部链接？",
+    "openLinkDesc": "此链接来自未受信任的 Markdown 内容，请确认目标地址。",
+    "openLink": "打开链接",
+    "openLinkFailed": "无法打开链接"
+  },
+  "common": {
+    "cancel": "取消"
   },
   "requestEditor": {
     "params": "Params",

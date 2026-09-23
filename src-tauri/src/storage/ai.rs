@@ -5,7 +5,7 @@ use serde::Serialize;
 
 use crate::config::db::{Db, DbCmd};
 use crate::proxy::ai::normalize::{AiContentBlock, AiTimelineTurnDto, AiTurn};
-use crate::storage::DbTable;
+use crate::storage::{DbTable, add_column_if_missing};
 
 // ── Table marker ──────────────────────────────────────────────────────────────
 
@@ -77,6 +77,8 @@ pub(crate) struct AiRequestFinalParams {
     pub streaming: i64,
     pub model: Option<String>,
     pub finish_reason: Option<String>,
+    /// 代理侧观测到的异常终止（`error` / `aborted`），`None` = 正常收尾。
+    pub terminated: Option<String>,
     pub first_chunk_ms: Option<i64>,
     pub duration_ms: Option<i64>,
     pub input_tokens: Option<i64>,
@@ -128,6 +130,9 @@ pub(crate) struct AiRequestMeta {
     pub(crate) model: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) finish_reason: Option<String>,
+    /// 代理侧观测到的异常终止（`error` / `aborted`），`None` = 正常收尾。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) terminated: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) first_chunk_ms: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -339,22 +344,23 @@ pub(crate) fn do_update_ai_request_final(
 ) -> Result<(), sqlite::Error> {
     let mut stmt = conn.prepare(
         "UPDATE ai_requests SET
-           streaming = ?, model = ?, finish_reason = ?, first_chunk_ms = ?, duration_ms = ?,
+           streaming = ?, model = ?, finish_reason = ?, terminated = ?, first_chunk_ms = ?, duration_ms = ?,
            input_tokens = ?, output_tokens = ?, total_tokens = ?, cached_tokens = ?, cache_creation_tokens = ?, reasoning_tokens = ?
          WHERE id = ?",
     )?;
     stmt.bind((1_usize, p.streaming))?;
     stmt.bind((2_usize, p.model.as_deref()))?;
     stmt.bind((3_usize, p.finish_reason.as_deref()))?;
-    stmt.bind((4_usize, p.first_chunk_ms))?;
-    stmt.bind((5_usize, p.duration_ms))?;
-    stmt.bind((6_usize, p.input_tokens))?;
-    stmt.bind((7_usize, p.output_tokens))?;
-    stmt.bind((8_usize, p.total_tokens))?;
-    stmt.bind((9_usize, p.cached_tokens))?;
-    stmt.bind((10_usize, p.cache_creation_tokens))?;
-    stmt.bind((11_usize, p.reasoning_tokens))?;
-    stmt.bind((12_usize, p.id))?;
+    stmt.bind((4_usize, p.terminated.as_deref()))?;
+    stmt.bind((5_usize, p.first_chunk_ms))?;
+    stmt.bind((6_usize, p.duration_ms))?;
+    stmt.bind((7_usize, p.input_tokens))?;
+    stmt.bind((8_usize, p.output_tokens))?;
+    stmt.bind((9_usize, p.total_tokens))?;
+    stmt.bind((10_usize, p.cached_tokens))?;
+    stmt.bind((11_usize, p.cache_creation_tokens))?;
+    stmt.bind((12_usize, p.reasoning_tokens))?;
+    stmt.bind((13_usize, p.id))?;
     stmt.next()?;
     Ok(())
 }
@@ -456,7 +462,8 @@ pub(crate) fn do_list_ai_sessions(
     {
         let mut stmt = conn.prepare(
             "SELECT id, session_id, streaming, model, finish_reason, first_chunk_ms, duration_ms, start_ms,
-                    input_tokens, output_tokens, total_tokens, cached_tokens, cache_creation_tokens, reasoning_tokens
+                    input_tokens, output_tokens, total_tokens, cached_tokens, cache_creation_tokens, reasoning_tokens,
+                    terminated
              FROM ai_requests ORDER BY id",
         )?;
         while let sqlite::State::Row = stmt.next()? {
@@ -474,6 +481,7 @@ pub(crate) fn do_list_ai_sessions(
                 streaming: stmt.read::<Option<i64>, _>(2)?.unwrap_or(0) != 0,
                 model: stmt.read::<Option<String>, _>(3)?,
                 finish_reason: stmt.read::<Option<String>, _>(4)?,
+                terminated: stmt.read::<Option<String>, _>(14)?,
                 first_chunk_ms: stmt.read::<Option<i64>, _>(5)?,
                 duration_ms: stmt.read::<Option<i64>, _>(6)?,
                 start_ms: stmt.read::<i64, _>(7)?,
@@ -623,9 +631,13 @@ impl DbTable for AiTable {
                 cached_tokens          INTEGER,
                 cache_creation_tokens  INTEGER,
                 reasoning_tokens       INTEGER,
+                terminated             TEXT,
                 created_at             INTEGER NOT NULL
             )",
         )?;
+
+        // 旧库迁移：terminated 列（响应流异常终止标记）在此列引入前建的库里不存在
+        add_column_if_missing(conn, "ai_requests", "terminated", "TEXT")?;
 
         conn.execute(
             "CREATE TABLE IF NOT EXISTS ai_turns (

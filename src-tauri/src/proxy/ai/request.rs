@@ -123,6 +123,7 @@ pub(crate) fn process_ai_request(ctx: &ProxyCtx, body_str: Option<String>) {
         streaming: false,
         model: None,
         finish_reason: None,
+        terminated: None,
         first_chunk_ms: None,
         duration_ms: None,
         start_ms: Some(ctx.start_ms()),

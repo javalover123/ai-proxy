@@ -161,7 +161,7 @@ pub async fn resend_request(
 
     // Send upstream
     let req = Request::from_parts(parts, Body::from(body_bytes));
-    let up = state.settings().proxy.upstream_proxy;
+    let up = state.settings().proxy.upstream_proxy_address();
     let svc = client::build_upstream_service(up, false);
     match svc.serve(req).await {
         Ok(resp) => {

@@ -13,6 +13,71 @@ pub(crate) trait DbTable {
     fn migrate(conn: &sqlite::Connection) -> Result<(), sqlite::Error>;
 }
 
+/// 旧库迁移助手：列不存在时才 `ALTER TABLE ... ADD COLUMN`。
+///
+/// `CREATE TABLE IF NOT EXISTS` 对已存在的表是 no-op，所以给现有表加列必须走这里，
+/// 否则老库永远拿不到新列。
+pub(crate) fn add_column_if_missing(
+    conn: &sqlite::Connection,
+    table: &str,
+    column: &str,
+    decl: &str,
+) -> Result<(), sqlite::Error> {
+    let exists = {
+        let mut stmt = conn.prepare("SELECT 1 FROM pragma_table_info(?) WHERE name = ?")?;
+        stmt.bind((1_usize, table))?;
+        stmt.bind((2_usize, column))?;
+        matches!(stmt.next()?, sqlite::State::Row)
+    };
+    if !exists {
+        conn.execute(format!("ALTER TABLE {table} ADD COLUMN {column} {decl}"))?;
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn columns(conn: &sqlite::Connection, table: &str) -> Vec<String> {
+        let mut stmt = conn
+            .prepare("SELECT name FROM pragma_table_info(?)")
+            .expect("prepare");
+        stmt.bind((1_usize, table)).expect("bind");
+        let mut names = Vec::new();
+        while let sqlite::State::Row = stmt.next().expect("step") {
+            names.push(stmt.read::<String, _>(0).expect("read"));
+        }
+        names
+    }
+
+    /// 旧库（缺列）→ 补列；再跑一次幂等，不会因重复 ALTER 失败。
+    #[test]
+    fn adds_missing_column_once() {
+        let conn = sqlite::open(":memory:").expect("open");
+        conn.execute("CREATE TABLE t (id INTEGER PRIMARY KEY)")
+            .expect("create");
+
+        add_column_if_missing(&conn, "t", "terminated", "TEXT").expect("first migrate");
+        assert_eq!(columns(&conn, "t"), vec!["id", "terminated"]);
+
+        add_column_if_missing(&conn, "t", "terminated", "TEXT").expect("second migrate");
+        assert_eq!(columns(&conn, "t"), vec!["id", "terminated"]);
+    }
+
+    /// 新库（建表时已含该列）→ 不重复 ALTER。
+    #[test]
+    fn leaves_existing_column_untouched() {
+        let conn = sqlite::open(":memory:").expect("open");
+        conn.execute("CREATE TABLE t (id INTEGER PRIMARY KEY, terminated TEXT)")
+            .expect("create");
+
+        add_column_if_missing(&conn, "t", "terminated", "TEXT").expect("migrate");
+
+        assert_eq!(columns(&conn, "t"), vec!["id", "terminated"]);
+    }
+}
+
 /// A key-value pair representing an HTTP header.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct HeaderPair {

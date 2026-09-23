@@ -8,19 +8,16 @@ pub mod utils;
 use proxy::state::AppState;
 use tauri::{Emitter, Manager, RunEvent};
 
-use crate::commands::get_traffic_detail;
-use crate::commands::load_traffic_history;
-use crate::commands::open_url;
-use crate::commands::resend_request;
 use crate::commands::{
     create_collection, create_folder, create_request, delete_node, duplicate_request,
     export_ca_cert, get_ai_config, get_ai_session, get_ai_thinking, get_collections, get_locale,
     get_prose_font_size, get_script_config, get_script_content, get_settings, get_ssl_config,
-    get_status, get_theme, install_ca_cert, list_ai_sessions, move_node, read_ca_cert_pem,
-    rename_node, save_ai_config, save_request, save_script_config, save_script_content,
-    save_settings, save_ssl_config, set_ai_enabled, set_locale, set_prose_font_size,
-    set_script_enabled, set_ssl_enabled, set_theme, start_proxy, stop_proxy,
-    subscribe_proxy_events, sync_tray_locale, test_rule_match,
+    get_status, get_theme, get_traffic_detail, install_ca_cert, list_ai_sessions,
+    load_traffic_history, move_node, open_url, read_ca_cert_pem, rename_node, resend_request,
+    save_ai_config, save_request, save_script_config, save_script_content, save_settings,
+    save_ssl_config, set_ai_enabled, set_locale, set_prose_font_size, set_script_enabled,
+    set_ssl_enabled, set_theme, start_proxy, stop_proxy, subscribe_proxy_events, sync_tray_locale,
+    test_rule_match,
 };
 use crate::config::{Settings, Store};
 
@@ -65,9 +62,8 @@ fn app_setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         Err(e) => log::warn!("[db] max_traffic_id failed: {e:?}, counter starts from 1"),
     }
 
-    let mut settings =
+    let settings =
         Settings::load_from_path(store.data_dir()).expect("Failed to load configuration");
-    settings.script.scripts_dir = Some(store.scripts_dir().clone());
     let ui = settings.ui.clone();
     let _ = app
         .handle()
@@ -116,6 +112,17 @@ fn handle_window_event(window: &tauri::Window, event: &tauri::WindowEvent) {
 }
 
 pub fn run() {
+    // debug 下 rustls/rama HTTP 客户端握手的调用栈很深，tokio 默认 2MiB
+    // worker 栈会直接 overflow（表现为点「发送」后进程瞬间退出，无 panic hook）。
+    // 必须在任何 Tauri async 初始化之前安装；runtime 不能 drop。
+    /* let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .thread_stack_size(4 * 1024 * 1024)
+        .build()
+        .expect("failed to create tokio runtime");
+    tauri::async_runtime::set(runtime.handle().clone());
+    std::mem::forget(runtime); */
+
     // 诊断探针：Windows GUI 应用的 panic 默认只打 stderr（无处可看）。
     // 钩子把 panic 位置与信息写入日志文件，用于排查静默任务死亡/锁毒化。
     // 同时链回默认 hook：logger 未挂载时（setup 早期）panic 仍可见于 stderr。

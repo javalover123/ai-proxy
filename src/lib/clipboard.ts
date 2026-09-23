@@ -6,25 +6,25 @@
 export async function copyToClipboard(text: string): Promise<void> {
   // 优先尝试 Clipboard API
   try {
-    await navigator.clipboard.writeText(text)
-    return
+    await navigator.clipboard.writeText(text);
+    return;
   } catch {
     // fallback 到 execCommand
   }
 
-  const textarea = document.createElement('textarea')
-  textarea.value = text
-  textarea.style.position = 'fixed'
-  textarea.style.left = '-9999px'
-  textarea.style.top = '-9999px'
-  textarea.setAttribute('readonly', '')
-  document.body.appendChild(textarea)
-  textarea.select()
-  textarea.setSelectionRange(0, text.length)
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.style.position = "fixed";
+  textarea.style.left = "-9999px";
+  textarea.style.top = "-9999px";
+  textarea.setAttribute("readonly", "");
+  document.body.appendChild(textarea);
+  textarea.select();
+  textarea.setSelectionRange(0, text.length);
   try {
-    document.execCommand('copy')
+    document.execCommand("copy");
   } catch {
     // 彻底失败，静默
   }
-  document.body.removeChild(textarea)
+  document.body.removeChild(textarea);
 }

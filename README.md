@@ -181,7 +181,9 @@ The config file lives at `~/.ai-proxy/setting.json` (override the root directory
   "proxy": {
     "listen_host": "127.0.0.1",  // proxy listen address
     "listen_port": 5201,          // proxy listen port
-    "upstream_proxy": false       // whether to use system proxy for upstream
+    "upstream_proxy_enabled": true, // upstream proxy toggle, off = direct
+    "upstream_proxy_host": "",    // upstream proxy address, empty = direct
+    "upstream_proxy_port": 0      // upstream proxy port
   },
   "ui": {
     "theme": "system",            // light / dark / system

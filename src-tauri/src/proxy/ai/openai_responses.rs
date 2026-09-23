@@ -9,7 +9,8 @@ use std::collections::BTreeMap;
 use serde_json::Value;
 
 use super::normalize::{
-    AiContentBlock, AiConversation, AiTurn, AiUsage, normalize_usage, parse_tool_input,
+    AiContentBlock, AiConversation, AiTurn, AiUsage, normalize_usage, openai_tool_def,
+    parse_tool_input,
 };
 use super::{AiProtocol, StreamState};
 
@@ -42,7 +43,7 @@ impl AiProtocol for OpenAiResponsesProtocol {
         if let Some(t) = p
             .get("tools")
             .and_then(Value::as_array)
-            .and_then(|ts| AiTurn::tools_def(ts))
+            .and_then(|ts| AiTurn::tool_defs(ts.iter().map(openai_tool_def).collect()))
         {
             turns.push(t);
         }
@@ -54,6 +55,58 @@ impl AiProtocol for OpenAiResponsesProtocol {
                 _ => "user",
             };
             let content = m.get("content");
+
+            // Responses `input[]` 用无 role 的 typed item 承载工具流量
+            // （`function_call` / `function_call_output`），与 Chat Completions 的
+            // role:"assistant" + tool_calls / role:"tool" 完全不同。需先按 type 分派，
+            // 否则它们会落进下面 `_ => text("")` 变成空 user 气泡。
+            match m.get("type").and_then(Value::as_str) {
+                Some("function_call") => {
+                    let id = m
+                        .get("call_id")
+                        .or_else(|| m.get("id"))
+                        .and_then(Value::as_str)
+                        .unwrap_or("")
+                        .to_string();
+                    let name = m
+                        .get("name")
+                        .and_then(Value::as_str)
+                        .unwrap_or("")
+                        .to_string();
+                    let args = m.get("arguments").and_then(Value::as_str).unwrap_or("");
+                    turns.push(AiTurn::new(
+                        "assistant",
+                        vec![AiContentBlock::ToolUse {
+                            id,
+                            name,
+                            input: parse_tool_input(args),
+                        }],
+                    ));
+                    continue;
+                }
+                Some("function_call_output") => {
+                    let tool_use_id = m
+                        .get("call_id")
+                        .or_else(|| m.get("id"))
+                        .and_then(Value::as_str)
+                        .unwrap_or("")
+                        .to_string();
+                    let inner = m
+                        .get("output")
+                        .and_then(Value::as_str)
+                        .map(|s| vec![AiContentBlock::text(s)])
+                        .unwrap_or_else(|| vec![AiContentBlock::text("")]);
+                    turns.push(AiTurn::new(
+                        "tool",
+                        vec![AiContentBlock::ToolResult {
+                            tool_use_id,
+                            content: inner,
+                        }],
+                    ));
+                    continue;
+                }
+                _ => {}
+            }
 
             if role == "tool" {
                 let inner = match content {
@@ -96,7 +149,7 @@ impl AiProtocol for OpenAiResponsesProtocol {
                 continue;
             }
 
-            let mut blocks: Vec<AiContentBlock> = match content {
+            let blocks: Vec<AiContentBlock> = match content {
                 Some(Value::String(s)) => vec![AiContentBlock::text(s.clone())],
                 Some(Value::Array(arr)) => {
                     let texts: Vec<AiContentBlock> = arr
@@ -120,33 +173,6 @@ impl AiProtocol for OpenAiResponsesProtocol {
                 }
                 _ => vec![AiContentBlock::text("")],
             };
-
-            if role == "assistant"
-                && let Some(tcs) = m.get("tool_calls").and_then(Value::as_array)
-            {
-                for tc in tcs {
-                    let id = tc
-                        .get("id")
-                        .and_then(Value::as_str)
-                        .unwrap_or("")
-                        .to_string();
-                    let func = tc.get("function");
-                    let name = func
-                        .and_then(|f| f.get("name"))
-                        .and_then(Value::as_str)
-                        .unwrap_or("")
-                        .to_string();
-                    let args = func
-                        .and_then(|f| f.get("arguments"))
-                        .and_then(Value::as_str)
-                        .unwrap_or("");
-                    blocks.push(AiContentBlock::ToolUse {
-                        id,
-                        name,
-                        input: parse_tool_input(args),
-                    });
-                }
-            }
 
             turns.push(AiTurn::new(role, blocks));
         }
@@ -299,7 +325,10 @@ impl StreamState for OpenAiResponsesStreamState {
                 let idx = p.get("output_index").and_then(Value::as_i64).unwrap_or(0);
                 self.output_items
                     .entry(idx)
-                    .or_default()
+                    .or_insert_with(|| OpenAiOutputItem {
+                        item_type: "message".to_string(),
+                        ..Default::default()
+                    })
                     .text
                     .push_str(delta);
             }
@@ -428,8 +457,13 @@ impl StreamState for OpenAiResponsesStreamState {
         )
     }
 
-    fn finalize(&mut self) {
+    fn finalize(&mut self) -> Option<&'static str> {
+        let term = match self.status.as_deref() {
+            Some("completed") => None,
+            _ => Some("error"),
+        };
         self.done = true;
+        term
     }
 }
 

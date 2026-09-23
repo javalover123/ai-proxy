@@ -2,10 +2,6 @@
 @import 'tw-animate-css';
 @import 'shadcn/tailwind.css';
 @import '@fontsource-variable/geist';
-@import 'streamdown/styles.css';
-
-/* streamdown：让 Tailwind 扫描其运行时类名（README 要求） */
-@source '../node_modules/streamdown/dist/*.js';
 
 @custom-variant dark (&:is(.dark *));
 
@@ -118,6 +114,8 @@
   --badge-client-error: oklch(0.53 0.24 25);
   --badge-server-error: oklch(0.5 0.25 25);
   --badge-error: oklch(0.5 0.25 25);
+  /* 警告（区别于 error）：请求成功但内容不完整，如响应流中断 */
+  --badge-warning: oklch(0.58 0.16 65);
   --badge-pending: oklch(0.5 0.06 100);
   --scrollbar-thumb: oklch(0.717 0 0);
   --scrollbar-thumb-hover: oklch(0.595 0 0);
@@ -179,6 +177,8 @@
   --badge-client-error: oklch(0.65 0.24 25);
   --badge-server-error: oklch(0.62 0.25 25);
   --badge-error: oklch(0.62 0.25 25);
+  /* 警告（区别于 error）：请求成功但内容不完整，如响应流中断 */
+  --badge-warning: oklch(0.75 0.16 65);
   --badge-pending: oklch(0.55 0.04 100);
   --scrollbar-thumb: oklch(0.269 0 0);
   --scrollbar-thumb-hover: oklch(0.338 0 0);
@@ -253,6 +253,14 @@
     border-color: var(--ai-user-bubble);
   }
   /* 全局 badge 颜色变量仍保留在 :root/.dark 中以支持 Badge 内联 style 引用 */
+
+  /* number 型输入框隐藏上下箭头：端口这类窄列里箭头会挤占本就不多的可视宽度 */
+  .no-spinner::-webkit-inner-spin-button,
+  .no-spinner::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    appearance: none;
+    margin: 0;
+  }
 }
 
 /* Tooltip 箭头统一隐藏：ui/tooltip.tsx 的 Arrow 颜色硬编码为 bg-foreground（暗色下近白），
@@ -262,14 +270,14 @@
   display: none;
 }
 
-/* react-shiki 代码高亮 */
+/* 详情面板代码高亮（highlight.ts / github 主题） */
 .shiki-body {
   font-size: var(--text-prose-md, 0.8125rem);
   line-height: 1.5;
 }
 .shiki-body pre {
   background: transparent !important;
-  /* 切断对气泡文字色的继承：streamdown 只在 token span 上设 --sdm-c，pre 本身 fallback
+  /* 切断对气泡文字色的继承：shiki 只在 token span 上设色，pre 本身 fallback
      到 inherit。蓝色 user 气泡会继承 text-white，落在亮色 bg-background 白底上隐形。
      钉死 foreground 与代码体 bg-background 形成正确对比；token span 自带显式色不受影响 */
   color: var(--foreground);
@@ -352,121 +360,205 @@
 .dark .tok-inserted { color: #98c379 }
 .dark .tok-deleted { color: #e06c75 }
 
+/* CodeMirror chrome：语义变量，随 :root / .dark 切换。token 色仍走上方 .tok-* */
+.cm-editor {
+  height: 100%;
+  background: transparent;
+}
+.cm-editor.cm-focused {
+  outline: none;
+}
+.cm-editor .cm-scroller {
+  font-family: var(--font-mono, 'Geist Mono', 'Menlo', monospace);
+  font-size: var(--text-prose-lg, 0.875rem);
+  line-height: 1.5;
+}
+
 /* ============ AI 气泡内 Markdown 渲染 ============ */
-/* 紧凑化 + 语义变量，明暗主题自动适配；streamdown 自带类由 @source 扫描生效 */
+/* 紧凑化 + 语义变量，明暗主题自动适配。渲染由本地 mdast→React 直渲染完成，
+   代码高亮走 shiki css-variables 主题，token 颜色经 --shiki-* 变量落在两套主题上。 */
 .md-content {
   line-height: 1.6;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--foreground);
+
+  /* 内容内部滚动条：随底色自适应（亮色黑系、暗色白系） */
+  --scrollbar-thumb: rgb(0 0 0 / 0.25);
+  --scrollbar-thumb-hover: rgb(0 0 0 / 0.4);
+
+  /* shiki css-variables 主题的基础前景/背景 */
+  --shiki-foreground: var(--foreground);
+  --shiki-background: transparent;
+  /* GitHub Light 风格的 token 色板 */
+  --shiki-token-comment: #6e7781;
+  --shiki-token-string: #0a3069;
+  --shiki-token-constant: #0550ae;
+  --shiki-token-keyword: #cf222e;
+  --shiki-token-parameter: #953800;
+  --shiki-token-function: #8250df;
+  --shiki-token-string-expression: #0a3069;
+  --shiki-token-punctuation: #6e7781;
+  --shiki-token-link: #0969da;
+  --shiki-token-inserted: #0a3069;
+  --shiki-token-deleted: #cf222e;
+  --shiki-token-changed: #953800;
 }
-.md-content h1,
-.md-content h2,
-.md-content h3,
-.md-content h4,
-.md-content h5,
-.md-content h6 {
+.md-content strong { font-weight: 600; }
+.md-content h1, .md-content h2, .md-content h3, .md-content h4, .md-content h5, .md-content h6 {
   font-weight: 600;
-  margin: 0.6em 0 0.3em;
+  line-height: 1.3;
+  margin: 1.1em 0 0.45em;
 }
-.md-content h1 { font-size: 1.25em; }
-.md-content h2 { font-size: 1.15em; }
-.md-content h3 { font-size: 1.05em; }
+.md-content h1 { font-size: 1.35em; }
+.md-content h2 { font-size: 1.2em; }
+.md-content h3 { font-size: 1.08em; }
 .md-content h4, .md-content h5, .md-content h6 { font-size: 1em; }
-.md-content p { margin: 0.35em 0; }
-.md-content ul, .md-content ol { margin: 0.35em 0; padding-left: 1.4em; }
+.md-content p { margin: 0.5em 0; }
+.md-content ul, .md-content ol { margin: 0.5em 0; padding-left: 1.5em; }
 .md-content ul { list-style: disc; }
 .md-content ol { list-style: decimal; }
-.md-content li { margin: 0.15em 0; }
+.md-content li { margin: 0.2em 0; }
+.md-content li > p { margin: 0.3em 0; }
+.md-content li > :first-child { margin-top: 0; }
+.md-content li > :last-child { margin-bottom: 0; }
 .md-content blockquote {
   border-left: 2px solid var(--border);
-  padding-left: 0.75em;
-  margin: 0.5em 0;
+  padding-left: 0.8em;
+  margin: 0.6em 0;
   color: var(--muted-foreground);
 }
-.md-content table { border-collapse: collapse; margin: 0.5em 0; font-size: 0.95em; }
-.md-content th, .md-content td { border: 1px solid var(--border); padding: 0.25em 0.6em; }
-.md-content th { background: rgb(0 0 0 / 0.06); font-weight: 600; }
-.dark .md-content th { background: rgb(255 255 255 / 0.06); }
-/* streamdown 表格双层 wrapper：外层 bg-sidebar（带工具栏）+ 内层 bg-background（滚动容器）。
-   assistant 气泡即 bg-background，内层与气泡同色融合、外层呈微浮卡片，无需覆盖。
-   蓝底 user 气泡（md-inverted）不在 shadcn 色板内：白字落白底会隐形、近黑卡片贴蓝很突兀，
-   用半透明黑叠蓝上 → 深一档蓝卡片，与蓝同族又和纯文本区拉开层次；白字 + 白描边可读。
-   全屏表格 portal 到 body、在 .md-content 之外，不受影响，保留自身底色 */
-.md-inverted [data-streamdown="table-wrapper"],
-.md-inverted [data-streamdown="table-wrapper"] :has(> [data-streamdown="table"]) {
-  background-color: rgb(0 0 0 / 0.2);
-}
+.md-content hr { border: none; border-top: 1px solid var(--border); margin: 1em 0; }
 .md-content :not(pre) > code {
   background: var(--muted);
   border-radius: 4px;
   padding: 0.1em 0.35em;
+  font-family: var(--font-mono, 'Geist Mono', 'Menlo', monospace);
   font-size: 0.9em;
 }
-.md-content pre { font-size: var(--text-prose-md, 0.8125rem); }
-/* streamdown 代码块 pre 自带 shiki 主题背景（github-dark 为蓝灰 #24292e），与中性灰的
-   wrapper/工具栏浮块色调冲突。与 .shiki-body 同约定：背景强制透明，继承 code-block-body
-   的 bg-background（蓝底暗色气泡则继承半透明黑叠蓝的深蓝卡片） */
-.md-content [data-streamdown="code-block-body"] pre {
-  background-color: transparent;
+.md-content :where(h1, h2, h3, h4, h5, h6) code { font-size: 0.9em; }
+.md-content a { color: var(--color-blue-500); text-decoration: underline; text-underline-offset: 2px; }
+.md-content a:hover { color: var(--color-blue-400); }
+
+/* GFM 表格：横向滚动容器 */
+.md-table-scroll { max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; margin: 0.6em 0; }
+.md-table-scroll table { border-collapse: collapse; width: max-content; max-width: max-content; font-size: 0.92em; }
+.md-table-scroll th, .md-table-scroll td { border: 1px solid var(--border); padding: 0.3em 0.7em; }
+.md-table-scroll th { background: rgb(0 0 0 / 0.05); font-weight: 600; }
+
+/* 图片 */
+.md-image { display: block; max-width: 100%; height: auto; border-radius: 8px; margin: 0.5em 0; }
+.md-image-alt { color: var(--muted-foreground); font-style: italic; }
+
+/* 任务列表 checkbox */
+.md-content input[type='checkbox'] { margin: 0 0.4em 0 0; accent-color: var(--muted-foreground); }
+.md-content .contains-task-list { list-style: none; padding-left: 0.4em; }
+
+/* 脚注区 */
+.md-content .footnotes { margin-top: 1em; font-size: 0.85em; color: var(--muted-foreground); }
+.md-content .footnotes ol { padding-left: 1.4em; }
+
+/* KaTeX 块公式横向滚动 */
+.md-content .katex-display { max-width: 100%; overflow-x: auto; overflow-y: hidden; }
+
+/* 代码块 */
+.md-code-block {
+  position: relative;
+  margin: 0.6em 0;
+  border-radius: 10px;
+  background: var(--surface-base);
+  overflow: hidden;
 }
-/* md 内容里代码块/表格的内部滚动条：全局 --scrollbar-thumb 是中性实色（暗色 #262626），
-   在暗色代码块底、蓝底气泡深蓝卡片上要么隐形要么突兀。改为半透明黑/白，随底色自适应：
-   亮色白底用黑系，暗色底用白系；蓝底气泡表格卡片亮暗皆深蓝，恒用白系 */
-.md-content {
-  --scrollbar-thumb: rgb(0 0 0 / 0.25);
-  --scrollbar-thumb-hover: rgb(0 0 0 / 0.4);
+.md-code-block-banner-wrap {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  background: var(--surface-base);
+  border-bottom: 1px solid var(--border);
 }
-.dark .md-content,
-.md-inverted [data-streamdown="table-wrapper"] {
+.md-code-block-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 12px;
+  font-size: var(--text-ui-sm, 0.6875rem);
+}
+.md-code-block-infostring {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono, 'Geist Mono', 'Menlo', monospace);
+  color: var(--muted-foreground);
+}
+.md-code-block-copy {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  font: inherit;
+  color: var(--muted-foreground);
+}
+.md-code-block-copy:hover { color: var(--foreground); }
+.md-code-block pre {
+  margin: 0;
+  padding: 0.6em 0.9em;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-size: var(--text-prose-md, 0.8125rem);
+  line-height: 1.55;
+  font-family: var(--font-mono, 'Geist Mono', 'Menlo', monospace);
+}
+.md-code-block pre.shiki { background: transparent !important; }
+.md-code-block pre code { font-family: inherit; background: none; padding: 0; }
+.md-code-block-plain { color: var(--foreground); }
+.md-code-block .line { display: inline-block; min-width: 100%; }
+
+.dark .md-content {
   --scrollbar-thumb: rgb(255 255 255 / 0.25);
   --scrollbar-thumb-hover: rgb(255 255 255 / 0.4);
+  --shiki-foreground: var(--foreground);
+  --shiki-token-comment: #5c6370;
+  --shiki-token-string: #98c379;
+  --shiki-token-constant: #d19a66;
+  --shiki-token-keyword: #c678dd;
+  --shiki-token-parameter: #e06c75;
+  --shiki-token-function: #61afef;
+  --shiki-token-string-expression: #98c379;
+  --shiki-token-punctuation: #abb2bf;
+  --shiki-token-link: #61afef;
+  --shiki-token-inserted: #98c379;
+  --shiki-token-deleted: #e06c75;
+  --shiki-token-changed: #e5c07b;
 }
-.md-content a { color: var(--color-blue-500); text-decoration: underline; text-underline-offset: 2px; }
 .dark .md-content a { color: var(--color-blue-400); }
-.md-content hr { border-color: var(--border); margin: 0.75em 0; }
-
-/* streamdown 表格全屏：Portal 到 body 后 fixed inset-0 会覆盖 TitleBar 和侧边栏。
-   约束到 TitleBar 下方（h-8=32px）、左侧 ToolBar 右侧（42px），与内容区对齐。 */
-[data-streamdown="table-fullscreen"] {
-  top: 32px !important;
-  left: 42px !important;
-}
+.dark .md-table-scroll th { background: rgb(255 255 255 / 0.06); }
 
 /* 深蓝底 user 气泡（白字）反色适配 */
+.md-inverted { color: var(--ai-user-bubble-text); }
 .md-inverted blockquote { border-color: rgb(255 255 255 / 0.4); color: rgb(255 255 255 / 0.85); }
-.md-inverted th, .md-inverted td { border-color: rgb(255 255 255 / 0.3); }
-.md-inverted th { background: rgb(255 255 255 / 0.05); }
+.md-inverted hr { border-color: rgb(255 255 255 / 0.3); }
 .md-inverted :not(pre) > code { background: rgb(255 255 255 / 0.18); color: #fff; }
 .md-inverted a { color: #fff; }
 .dark .md-inverted a { color: #fff; }
-
-/* 蓝底 user 气泡内的 streamdown 代码块（data-streamdown="code-block" / "code-block-body"）。
-   streamdown 用 bg-sidebar / bg-background 做 wrapper + pre 文字色 fallback 到 inherit：
-   - 亮色：pre 继承 text-white，落在 bg-background 白底上 → 白字白底隐形。保留白底（token 深色
-     在白底可见、本身即白卡与文本区分），仅把 code-body 文字钉死 foreground，让 plain 代码可读
-   - 暗色：bg-sidebar/bg-background 近黑，贴蓝气泡呈黑块很不搭。改用半透明黑叠蓝上 → 深一档
-     蓝卡片，与蓝同族不突兀，又和纯文本/表格拉开层次；light token + foreground 文字可读 */
-.md-inverted [data-streamdown="code-block-body"] {
-  color: var(--foreground);
+.md-inverted .md-table-scroll th, .md-inverted .md-table-scroll td { border-color: rgb(255 255 255 / 0.3); }
+.md-inverted .md-table-scroll th { background: rgb(255 255 255 / 0.06); }
+.md-inverted .md-code-block {
+  background: rgb(0 0 0 / 0.22);
+  border: 1px solid rgb(255 255 255 / 0.15);
 }
-.dark .md-inverted [data-streamdown="code-block"],
-.dark .md-inverted [data-streamdown="code-block-body"] {
-  background-color: rgb(0 0 0 / 0.25);
+.md-inverted .md-code-block-banner-wrap {
+  background: rgb(0 0 0 / 0.22);
+  border-bottom-color: rgb(255 255 255 / 0.15);
 }
-/* 暗色蓝底气泡里复制/下载按钮的悬浮块用 bg-sidebar/80（近黑），贴深蓝卡片呈黑色块。
-   改半透明黑 + 白描边，融入蓝族 */
-.dark .md-inverted [data-streamdown="code-block-actions"] {
-  background-color: rgb(0 0 0 / 0.3);
-  border-color: rgb(255 255 255 / 0.15);
-}
-
-/* 深蓝卡片内 streamdown 工具栏元素（复制/下载/全屏按钮、语言标签）默认用 text-muted-foreground
-   + hover:bg-muted（灰色系），跟蓝底不搭。本地覆写 --muted / --muted-foreground 为白色族，
-   所有 muted 工具类自动融入蓝底。表格工具栏（table-wrapper）深蓝卡片亮暗皆是，两模式都覆写；
-   代码块（code-block）亮色是白底、灰色 muted 本就匹配，只在暗色深蓝卡片覆写 */
-.md-inverted [data-streamdown="table-wrapper"],
-.dark .md-inverted [data-streamdown="code-block"] {
-  --muted: rgb(255 255 255 / 0.12);
-  --muted-foreground: rgb(255 255 255 / 0.7);
-}
+.md-inverted .md-code-block-infostring,
+.md-inverted .md-code-block-copy { color: rgb(255 255 255 / 0.72); }
+.md-inverted .md-code-block-copy:hover { color: #fff; }
+.md-inverted .md-code-block pre { color: var(--foreground); }
+.md-inverted .md-code-block-plain { color: var(--foreground); }
 
 /* ===== Slide-over 侧滑面板动画 ===== */
 @keyframes slide-in-right {

@@ -1,9 +1,9 @@
-import { useTranslation } from 'react-i18next'
-import { cn } from '@/lib/utils'
+import { useTranslation } from "react-i18next";
+import { cn } from "@/lib/utils";
 
 export interface ToolFilterItem {
-  toolName: string
-  count: number
+  toolName: string;
+  count: number;
 }
 
 /*
@@ -17,21 +17,28 @@ export interface ToolFilterItem {
 */
 
 interface ToolFilterBarProps {
-  items: ToolFilterItem[]
+  items: ToolFilterItem[];
   /** 'all' | 'no_tools' | Set<string> */
-  selectedTools: Set<string>
-  isNoTools: boolean
-  onToggleAll: () => void
-  onToggleNoTools: () => void
-  onToggleTool: (toolName: string) => void
+  selectedTools: Set<string>;
+  isNoTools: boolean;
+  onToggleAll: () => void;
+  onToggleNoTools: () => void;
+  onToggleTool: (toolName: string) => void;
 }
 
-export function ToolFilterBar({ items, selectedTools, isNoTools, onToggleAll, onToggleNoTools, onToggleTool }: ToolFilterBarProps) {
-  const { t } = useTranslation()
+export function ToolFilterBar({
+  items,
+  selectedTools,
+  isNoTools,
+  onToggleAll,
+  onToggleNoTools,
+  onToggleTool,
+}: ToolFilterBarProps) {
+  const { t } = useTranslation();
 
-  if (items.length === 0) return null
+  if (items.length === 0) return null;
 
-  const isAll = !isNoTools && selectedTools.size === 0
+  const isAll = !isNoTools && selectedTools.size === 0;
 
   return (
     <div className="flex flex-wrap items-center gap-1.5 px-3 py-2 border-b border-border/40 bg-background">
@@ -39,52 +46,44 @@ export function ToolFilterBar({ items, selectedTools, isNoTools, onToggleAll, on
       <button
         type="button"
         className={cn(
-          'inline-flex items-center px-2.5 py-1 rounded-full text-ui-xs font-medium whitespace-nowrap transition-colors',
-          isAll
-            ? 'bg-foreground text-background'
-            : 'bg-muted text-foreground hover:bg-muted/80',
+          "inline-flex items-center px-2.5 py-1 rounded-full text-ui-xs font-medium whitespace-nowrap transition-colors",
+          isAll ? "bg-foreground text-background" : "bg-muted text-foreground hover:bg-muted/80",
         )}
         onClick={onToggleAll}
       >
-        {t('aiView.toolFilterAll', '全部')}
+        {t("aiView.toolFilterAll", "全部")}
       </button>
 
       {/* 纯对话 */}
       <button
         type="button"
         className={cn(
-          'inline-flex items-center px-2.5 py-1 rounded-full text-ui-xs font-medium whitespace-nowrap transition-colors',
-          isNoTools
-            ? 'bg-foreground text-background'
-            : 'bg-muted text-foreground hover:bg-muted/80',
+          "inline-flex items-center px-2.5 py-1 rounded-full text-ui-xs font-medium whitespace-nowrap transition-colors",
+          isNoTools ? "bg-foreground text-background" : "bg-muted text-foreground hover:bg-muted/80",
         )}
         onClick={onToggleNoTools}
       >
-        {t('aiView.toolFilterNoTools', '纯对话')}
+        {t("aiView.toolFilterNoTools", "纯对话")}
       </button>
 
       {/* 各工具 pill（多选 toggle） */}
       {items.map((item) => {
-        const active = selectedTools.has(item.toolName)
+        const active = selectedTools.has(item.toolName);
         return (
           <button
             key={item.toolName}
             type="button"
             className={cn(
-              'inline-flex items-center px-2.5 py-1 rounded-full text-ui-xs font-medium whitespace-nowrap transition-colors',
-              active
-                ? 'bg-amber-500 text-white'
-                : 'bg-muted text-foreground hover:bg-muted/80',
+              "inline-flex items-center px-2.5 py-1 rounded-full text-ui-xs font-medium whitespace-nowrap transition-colors",
+              active ? "bg-amber-500 text-white" : "bg-muted text-foreground hover:bg-muted/80",
             )}
             onClick={() => onToggleTool(item.toolName)}
           >
             {item.toolName}
-            <span className={cn('ml-1 text-ui-2xs', active ? 'opacity-80' : 'opacity-50')}>
-              ×{item.count}
-            </span>
+            <span className={cn("ml-1 text-ui-2xs", active ? "opacity-80" : "opacity-50")}>×{item.count}</span>
           </button>
-        )
+        );
       })}
     </div>
-  )
+  );
 }

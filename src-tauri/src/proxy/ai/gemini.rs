@@ -9,7 +9,9 @@ use std::collections::BTreeMap;
 
 use serde_json::Value;
 
-use super::normalize::{AiContentBlock, AiConversation, AiTurn, AiUsage, normalize_usage};
+use super::normalize::{
+    AiContentBlock, AiConversation, AiToolDef, AiTurn, AiUsage, normalize_usage, opt_string,
+};
 use super::{AiProtocol, StreamState};
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -44,7 +46,7 @@ impl AiProtocol for GeminiProtocol {
         if let Some(t) = p
             .get("tools")
             .and_then(Value::as_array)
-            .and_then(|ts| AiTurn::tools_def(ts))
+            .and_then(|ts| AiTurn::tool_defs(gemini_tool_defs(ts)))
         {
             turns.push(t);
         }
@@ -147,6 +149,47 @@ fn parse_tool_args(raw: &Value) -> Value {
         }
         _ => Value::Object(Default::default()),
     }
+}
+
+/// Gemini `tools[]` → 工具定义列表。
+///
+/// Gemini 的一个 `tools[]` 项可以承载多个函数声明
+/// （`{functionDeclarations:[{name, description, parametersJsonSchema}]}`），
+/// 此处展开为 N 个 `Function` 条目——展示层只关心工具本身，分组信息无用。
+/// 内置工具项（`{googleSearch:{}}` / `{codeExecution:{}}` / `{urlContext:{}}` …）
+/// 没有 `functionDeclarations`，整项落 `Raw`。
+///
+/// 键名同时认 camelCase 与 snake_case：Gemini 的 proto JSON 两种都接受，
+/// 而这里认错就意味着整个 tools 段退化成 Raw。
+fn gemini_tool_defs(tools: &[Value]) -> Vec<AiToolDef> {
+    let mut defs: Vec<AiToolDef> = Vec::new();
+    for t in tools {
+        let decls = t
+            .get("functionDeclarations")
+            .or_else(|| t.get("function_declarations"))
+            .and_then(Value::as_array);
+        let Some(decls) = decls else {
+            defs.push(AiToolDef::Raw { json: t.clone() });
+            continue;
+        };
+        for d in decls {
+            match d.get("name").and_then(Value::as_str) {
+                Some(name) if !name.is_empty() => defs.push(AiToolDef::Function {
+                    name: name.to_string(),
+                    description: opt_string(d.get("description")),
+                    // 新版用 parametersJsonSchema（标准 JSON Schema），
+                    // 旧版用 parameters（OpenAPI 3.0 子集方言），取先有者
+                    parameters: d
+                        .get("parametersJsonSchema")
+                        .or_else(|| d.get("parameters_json_schema"))
+                        .or_else(|| d.get("parameters"))
+                        .cloned(),
+                }),
+                _ => defs.push(AiToolDef::Raw { json: d.clone() }),
+            }
+        }
+    }
+    defs
 }
 
 /// 从 parts 数组提取 content blocks（text / thinking / tool_use / tool_result）。
@@ -305,7 +348,10 @@ impl StreamState for GeminiStreamState {
                     entry.finish_reason = Some(fr.to_string());
                 }
             }
-            let all_done = candidates.iter().all(|c| c.get("finishReason").is_some());
+            // 空 candidates 数组的 `.all()` 会 vacuous-true，需显式排除，
+            // 否则一条无候选的 chunk 会把流提前标记为完成。
+            let all_done = !candidates.is_empty()
+                && candidates.iter().all(|c| c.get("finishReason").is_some());
             if all_done {
                 self.done = true;
             }
@@ -351,7 +397,9 @@ impl StreamState for GeminiStreamState {
         )
     }
 
-    fn finalize(&mut self) {
+    fn finalize(&mut self) -> Option<&'static str> {
+        let term = (!self.done).then_some("error");
         self.done = true;
+        term
     }
 }

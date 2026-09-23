@@ -44,6 +44,11 @@ pub(crate) enum DbCmd {
         id: i64,
         error: String,
     },
+    /// 标记响应流异常终止（`error` = 上游流出错，`aborted` = 下游未读完）。
+    SetTrafficTerminated {
+        id: i64,
+        reason: String,
+    },
     InsertChunk {
         request_id: i64,
         chunk: String,
@@ -289,6 +294,11 @@ fn writer_loop(conn: sqlite::Connection, rx: mpsc::Receiver<DbCmd>, db_path: Str
             DbCmd::SetTrafficError { id, error } => {
                 traffic::do_set_traffic_error(&conn, id, &error)
                     .unwrap_or_else(|e| log::warn!("set_traffic_error: {e}"));
+            }
+
+            DbCmd::SetTrafficTerminated { id, reason } => {
+                traffic::do_set_traffic_terminated(&conn, id, &reason)
+                    .unwrap_or_else(|e| log::warn!("set_traffic_terminated: {e}"));
             }
 
             DbCmd::InsertChunk {

@@ -8,7 +8,7 @@ use tauri::ipc::Channel;
 use crate::proxy::ctx::{ProxyCtx, collect_headers, map_to_kv_json};
 use crate::proxy::events::ProxyEvent;
 use crate::utils::buf_pool;
-use crate::utils::buf_pool::BodyObserver;
+use crate::utils::buf_pool::{BodyObserver, CaptureOutcome};
 
 use super::ai::response::AiState;
 use super::ai::{self};
@@ -93,10 +93,22 @@ pub(crate) fn record_response(ctx: ProxyCtx, resp: Response) -> Response {
             .ok();
     }
 
-    resp.map(|body| {
+    let method = ctx.method().to_string();
+    let uri = ctx.uri().to_string();
+    let request_id = ctx.request_id();
+    let map_start = crate::utils::date::now_ms();
+    let mapped = resp.map(|body| {
         let observer = ResponseObserver::new(ctx, status.as_u16(), is_sse);
         buf_pool::observe_body(body, observer)
-    })
+    });
+    info!(
+        "resp.map took {}ms [{} {}] id={}",
+        (crate::utils::date::now_ms() - map_start).max(0),
+        method,
+        uri,
+        request_id
+    );
+    mapped
 }
 
 /// 非代理路径（resend 等）使用的便捷函数。
@@ -215,22 +227,33 @@ impl BodyObserver for ResponseObserver {
         }
     }
 
-    fn on_aborted(&mut self) {
-        log::warn!(
-            "[traffic] response body aborted mid-stream for request {}",
-            self.ctx.request_id()
-        );
-    }
-
-    fn on_eos(&mut self) {
+    fn on_end(&mut self, outcome: CaptureOutcome) {
         if self.finalized {
             return;
         }
         self.finalized = true;
 
+        let terminated = terminated_reason(outcome);
+        if let Some(reason) = terminated {
+            log::warn!(
+                "[traffic] response body terminated ({reason}) for request {}",
+                self.ctx.request_id()
+            );
+            if let (Some(db), Some(db_id)) = (self.ctx.db_ref(), self.ctx.db_id()) {
+                db.set_traffic_terminated(db_id, reason).ok();
+            }
+        }
+
+        // finalize 必须排在 ResponseEnd 之前：它会 flush SSE framer 的残留帧并发出
+        // 最后一个 ResponseChunk，否则前端会在「流已结束」之后又收到 chunk。
         let body_text = self
             .recording
             .finalize(self.ctx.request_id(), self.ctx.sender());
+
+        self.ctx.send(ProxyEvent::ResponseEnd {
+            id: self.ctx.request_id(),
+            terminated: terminated.map(str::to_owned),
+        });
 
         if let Some(ai) = self.ai.take() {
             ai.finalize(
@@ -239,8 +262,21 @@ impl BodyObserver for ResponseObserver {
                 self.first_chunk_at,
                 self.ctx.sender(),
                 body_text,
+                terminated,
             );
         }
+    }
+}
+
+/// 流终止原因 → 记录标记。`None` = 正常完成，不落标记。
+///
+/// `Aborted` 记为 `"aborted"`（下游未读完）而非 `"error"`：按 rama 语义它不必然
+/// 意味着缺字节，不能断言数据被截断。
+fn terminated_reason(outcome: CaptureOutcome) -> Option<&'static str> {
+    match outcome {
+        CaptureOutcome::Complete => None,
+        CaptureOutcome::Error => Some("error"),
+        CaptureOutcome::Aborted => Some("aborted"),
     }
 }
 

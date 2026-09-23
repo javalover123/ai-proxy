@@ -32,7 +32,7 @@ tauri-plugin-window-state = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-updater = "2"
 time = { version = "0.3", features = ["formatting", "local-offset"] }
-rama = { git = "https://github.com/plabayo/rama", rev = "05516791458d57cd0cb5607d6b5e7cb403efc241", features = [
+rama = { git = "https://github.com/plabayo/rama", rev = "ab19e3d62f2f527b5915a3e667c121637e81d039", features = [
   "http-full",
   "rustls",
   "ring",

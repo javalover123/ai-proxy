@@ -1,6 +1,7 @@
 use crate::utils::domain_match;
 use log::info;
 use rama::error::{BoxError, ErrorContext};
+use rama::net::address::ProxyAddress;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::path::PathBuf;
@@ -76,9 +77,6 @@ pub struct ScriptConfig {
     /// 脚本列表，每项可单独开关
     #[serde(default)]
     pub scripts: Vec<ScriptItem>,
-    /// 脚本文件目录，不序列化（后端运行时注入）
-    #[serde(skip)]
-    pub scripts_dir: Option<std::path::PathBuf>,
 }
 
 /// AI 厂商标识。用于 URL 规则匹配和前端展示。
@@ -267,9 +265,16 @@ pub struct ProxyConfig {
     /// 监听端口
     #[serde(default)]
     pub listen_port: u16,
-    /// 是否使用系统代理转发上游请求，默认关闭
+    /// 上游代理开关。关闭时忽略下面的地址/端口，请求直连；
+    /// 用于临时停用而不必清空已填好的地址。
+    #[serde(default = "default_true")]
+    pub upstream_proxy_enabled: bool,
+    /// 上游代理地址（IP 或域名），留空表示不使用上游代理，请求直连
     #[serde(default)]
-    pub upstream_proxy: bool,
+    pub upstream_proxy_host: String,
+    /// 上游代理端口
+    #[serde(default)]
+    pub upstream_proxy_port: u16,
 }
 
 impl Default for ProxyConfig {
@@ -277,7 +282,56 @@ impl Default for ProxyConfig {
         Self {
             listen_host: "127.0.0.1".to_string(),
             listen_port: 5201,
-            upstream_proxy: false,
+            upstream_proxy_enabled: true,
+            upstream_proxy_host: String::new(),
+            upstream_proxy_port: 0,
+        }
+    }
+}
+
+impl ProxyConfig {
+    /// 解析上游代理地址，供 `ProxyAddressLayer` 使用。
+    ///
+    /// 开关关闭或地址为空 → `None`（直连）。地址非法 → 记录警告后同样返回 `None`，
+    /// 回落直连而不是让每个请求都失败。
+    ///
+    /// 地址框以裸主机名/IP 为主，但也容忍用户整段粘贴：
+    /// 带 scheme（`http://`、`https://`）时沿用该 scheme，否则按 `http://` 处理；
+    /// 地址里已自带端口时以其为准，忽略端口框。
+    pub fn upstream_proxy_address(&self) -> Option<ProxyAddress> {
+        if !self.upstream_proxy_enabled {
+            return None;
+        }
+        let raw = self.upstream_proxy_host.trim();
+        if raw.is_empty() {
+            return None;
+        }
+
+        let (scheme, rest) = raw.split_once("://").unwrap_or(("http", raw));
+        let rest = rest.trim_end_matches('/');
+        // 判断是否自带端口：先剥掉 `user:pass@` 凭据，再排除 IPv6 字面量
+        // `[::1]` 内部的冒号，只认 `]` 之后的 `:port`。
+        let host_part = rest.rsplit_once('@').map_or(rest, |(_, host)| host);
+        let has_port = match host_part.rsplit_once(']') {
+            Some((_, tail)) => tail.starts_with(':'),
+            None => host_part.contains(':'),
+        };
+
+        let candidate = if has_port {
+            format!("{scheme}://{rest}")
+        } else if self.upstream_proxy_port == 0 {
+            info!("上游代理端口未配置，忽略上游代理地址 {raw}");
+            return None;
+        } else {
+            format!("{scheme}://{rest}:{}", self.upstream_proxy_port)
+        };
+
+        match ProxyAddress::try_from(candidate.as_str()) {
+            Ok(addr) => Some(addr),
+            Err(err) => {
+                info!("上游代理地址 {candidate} 解析失败，回落直连: {err}");
+                None
+            }
         }
     }
 }
@@ -510,5 +564,92 @@ pub fn sync_ssl_for_ai(ssl: &mut SslConfig, ai: &AiConfig) {
                 enabled: true,
             });
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn proxy_cfg(host: &str, port: u16) -> ProxyConfig {
+        ProxyConfig {
+            upstream_proxy_host: host.to_string(),
+            upstream_proxy_port: port,
+            ..Default::default()
+        }
+    }
+
+    /// 地址留空 / 仅空白 / 端口为 0 都视为未配置，回落直连。
+    #[test]
+    fn upstream_proxy_unset_means_direct() {
+        assert!(proxy_cfg("", 7890).upstream_proxy_address().is_none());
+        assert!(proxy_cfg("   ", 7890).upstream_proxy_address().is_none());
+        assert!(proxy_cfg("127.0.0.1", 0).upstream_proxy_address().is_none());
+    }
+
+    /// 开关关闭时忽略已填好的地址，回落直连（地址不必清空）。
+    #[test]
+    fn upstream_proxy_disabled_ignores_address() {
+        let mut cfg = proxy_cfg("127.0.0.1", 7890);
+        assert!(cfg.upstream_proxy_address().is_some());
+        cfg.upstream_proxy_enabled = false;
+        assert!(cfg.upstream_proxy_address().is_none());
+    }
+
+    /// 裸主机/IP + 端口框：按 http:// 组装。
+    #[test]
+    fn upstream_proxy_host_and_port() {
+        let addr = proxy_cfg("127.0.0.1", 7890)
+            .upstream_proxy_address()
+            .expect("valid address");
+        assert_eq!(addr.to_string(), "http://127.0.0.1:7890");
+
+        let addr = proxy_cfg(" proxy.local ", 3128)
+            .upstream_proxy_address()
+            .expect("valid address");
+        assert_eq!(addr.to_string(), "http://proxy.local:3128");
+    }
+
+    /// 整段粘贴时容错：scheme 沿用，地址自带端口则忽略端口框。
+    #[test]
+    fn upstream_proxy_accepts_pasted_forms() {
+        for (host, port, expected) in [
+            ("http://127.0.0.1:8888", 7890, "http://127.0.0.1:8888"),
+            (
+                "https://proxy.local:8443/",
+                7890,
+                "https://proxy.local:8443",
+            ),
+            ("127.0.0.1:8888", 7890, "http://127.0.0.1:8888"),
+            ("[::1]:8888", 7890, "http://[::1]:8888"),
+            // IPv6 字面量不带端口时仍取端口框，内部冒号不误判为端口
+            ("[::1]", 7890, "http://[::1]:7890"),
+            // 凭据里的冒号同样不误判为端口
+            (
+                "http://u:p@proxy.local",
+                7890,
+                "http://u:p@proxy.local:7890",
+            ),
+        ] {
+            let addr = proxy_cfg(host, port)
+                .upstream_proxy_address()
+                .unwrap_or_else(|| panic!("{host} should parse"));
+            assert_eq!(addr.to_string(), expected, "input: {host}");
+        }
+    }
+
+    /// 非法地址回落直连，而不是让每个请求都失败。
+    #[test]
+    fn upstream_proxy_invalid_falls_back_to_direct() {
+        assert!(
+            proxy_cfg("http://", 7890)
+                .upstream_proxy_address()
+                .is_none()
+        );
+        assert!(
+            proxy_cfg("127.0.0.1:notaport", 7890)
+                .upstream_proxy_address()
+                .is_none()
+        );
     }
 }

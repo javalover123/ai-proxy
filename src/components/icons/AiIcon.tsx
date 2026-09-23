@@ -1,5 +1,5 @@
 interface Props {
-  className?: string
+  className?: string;
 }
 
 export function AiIcon({ className }: Props) {
@@ -17,5 +17,5 @@ export function AiIcon({ className }: Props) {
       <circle cx="7.5" cy="14.5" r="1.5" />
       <circle cx="16.5" cy="14.5" r="1.5" />
     </svg>
-  )
+  );
 }

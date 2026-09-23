@@ -5,6 +5,7 @@ use rama::extensions::Extension;
 use rama::http::{Request, Response};
 use rama::service::BoxService;
 use rama::tls::server::TlsServerConfig;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 use tauri::ipc::Channel;
@@ -17,6 +18,8 @@ use crate::config::{Settings, Store};
 pub(crate) struct State {
     mitm_tls_service_data: TlsServerConfig,
     read_settings: Arc<RwLock<Settings>>,
+    /// 脚本文件目录。运行时从 Store 派生，不属于序列化配置，故独立于 Settings 持有。
+    scripts_dir: PathBuf,
     event_channel: Arc<RwLock<Option<Channel<ProxyEvent>>>>,
     /// 跨请求 AI 会话表（内存，不持久化）。
     sessions: Arc<Mutex<SessionStore>>,
@@ -45,6 +48,7 @@ impl State {
     pub(crate) fn with_sessions(
         mitm_tls_service_data: TlsServerConfig,
         read_settings: Arc<RwLock<Settings>>,
+        scripts_dir: PathBuf,
         event_channel: Arc<RwLock<Option<Channel<ProxyEvent>>>>,
         db: Arc<Db>,
         sessions: Arc<Mutex<SessionStore>>,
@@ -52,6 +56,7 @@ impl State {
         Self {
             mitm_tls_service_data,
             read_settings,
+            scripts_dir,
             event_channel,
             sessions,
             db,
@@ -70,7 +75,8 @@ impl State {
 
     /// 上游 HTTP 客户端（含超时/解压/流标准化；OnceLock 缓存，首次调用时构建）。
     pub(crate) fn upstream_client(&self) -> BoxService<Request, Response, BoxError> {
-        crate::proxy::client::build_upstream_service(self.settings().proxy.upstream_proxy, true)
+        let upstream_proxy = self.settings().proxy.upstream_proxy_address();
+        crate::proxy::client::build_upstream_service(upstream_proxy, true)
     }
 
     pub(crate) fn mitm_tls_service_data(&self) -> &TlsServerConfig {
@@ -86,15 +92,12 @@ impl State {
         method: &str,
     ) -> Vec<String> {
         let config = &settings.script;
-        let Some(ref dir) = config.scripts_dir else {
-            return Vec::new();
-        };
         config
             .scripts
             .iter()
             .filter(|item| item.matches(host, method))
             .filter_map(|item| {
-                let path = dir.join(&item.file_name);
+                let path = self.scripts_dir.join(&item.file_name);
                 match std::fs::read_to_string(&path) {
                     Ok(content) if !content.trim().is_empty() => Some(content),
                     Ok(_) => {

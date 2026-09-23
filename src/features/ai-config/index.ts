@@ -1,1 +1,1 @@
-export { default as AiConfigDialog } from './AiConfigDialog'
+export { default as AiConfigDialog } from "./AiConfigDialog";

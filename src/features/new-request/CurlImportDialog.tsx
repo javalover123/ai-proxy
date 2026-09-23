@@ -1,49 +1,43 @@
-import { useState, useCallback, useEffect } from 'react'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
-import { useLocale } from '@/hooks/useLocale'
-import { parseCurl, type CurlParsedResultOk } from '@/lib/curl'
+import { useCallback, useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useLocale } from "@/hooks/useLocale";
+import { type CurlParsedResultOk, parseCurl } from "@/lib/curl";
 
 export interface CurlImportDialogProps {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  onConfirm: (result: CurlParsedResultOk) => void
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onConfirm: (result: CurlParsedResultOk) => void;
 }
 
 export function CurlImportDialog({ open, onOpenChange, onConfirm }: CurlImportDialogProps) {
-  const { t } = useLocale()
-  const [value, setValue] = useState('')
-  const [error, setError] = useState('')
+  const { t } = useLocale();
+  const [value, setValue] = useState("");
+  const [error, setError] = useState("");
 
   // 弹窗关闭时清空 textarea 和 error
   useEffect(() => {
     if (!open) {
-      setValue('')
-      setError('')
+      setValue("");
+      setError("");
     }
-  }, [open])
+  }, [open]);
 
   const handleConfirm = useCallback(() => {
-    const result = parseCurl(value.trim())
+    const result = parseCurl(value.trim());
     if (result.ok) {
-      onConfirm(result)
-      onOpenChange(false)
+      onConfirm(result);
+      onOpenChange(false);
     } else {
-      setError(result.error)
+      setError(result.error);
     }
-  }, [value, onConfirm, onOpenChange])
+  }, [value, onConfirm, onOpenChange]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[520px]">
         <DialogHeader>
-          <DialogTitle>{t('collection.curlDialogTitle')}</DialogTitle>
+          <DialogTitle>{t("collection.curlDialogTitle")}</DialogTitle>
         </DialogHeader>
 
         <textarea
@@ -51,24 +45,25 @@ export function CurlImportDialog({ open, onOpenChange, onConfirm }: CurlImportDi
                      text-foreground placeholder:text-muted-foreground/50 resize-none
                      focus:outline-none focus:ring-2 focus:ring-primary/30"
           value={value}
-          onChange={e => { setValue(e.target.value); setError('') }}
-          placeholder={t('collection.curlDialogPlaceholder')}
+          onChange={(e) => {
+            setValue(e.target.value);
+            setError("");
+          }}
+          placeholder={t("collection.curlDialogPlaceholder")}
           autoFocus
         />
 
-        {error && (
-          <p className="text-xs text-destructive">{error}</p>
-        )}
+        {error && <p className="text-xs text-destructive">{error}</p>}
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            {t('settings.cancel')}
+            {t("settings.cancel")}
           </Button>
           <Button variant="outline" onClick={handleConfirm} disabled={!value.trim()}>
-            {t('collection.importCurl')}
+            {t("collection.importCurl")}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  )
+  );
 }

@@ -181,7 +181,9 @@ client = OpenAI(http_client=httpx.Client(proxy="http://127.0.0.1:5201"))
   "proxy": {
     "listen_host": "127.0.0.1",  // 代理监听地址
     "listen_port": 5201,          // 代理监听端口
-    "upstream_proxy": false       // 是否使用系统代理转发上游
+    "upstream_proxy_enabled": true, // 上游代理开关，关闭则直连
+    "upstream_proxy_host": "",    // 上游代理地址，留空则直连
+    "upstream_proxy_port": 0      // 上游代理端口
   },
   "ui": {
     "theme": "system",            // light / dark / system

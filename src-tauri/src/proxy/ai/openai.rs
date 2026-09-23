@@ -6,7 +6,8 @@ use std::collections::BTreeMap;
 use serde_json::Value;
 
 use super::normalize::{
-    AiContentBlock, AiConversation, AiTurn, AiUsage, normalize_usage, parse_tool_input,
+    AiContentBlock, AiConversation, AiTurn, AiUsage, normalize_usage, openai_tool_def,
+    parse_tool_input,
 };
 use super::{AiProtocol, StreamState};
 
@@ -40,7 +41,7 @@ impl AiProtocol for OpenAiChatProtocol {
                 && let Some(t) = p
                     .get("tools")
                     .and_then(Value::as_array)
-                    .and_then(|ts| AiTurn::tools_def(ts))
+                    .and_then(|ts| AiTurn::tool_defs(ts.iter().map(openai_tool_def).collect()))
             {
                 turns.push(t);
             }
@@ -347,7 +348,9 @@ impl StreamState for OpenAiStreamState {
         )
     }
 
-    fn finalize(&mut self) {
+    fn finalize(&mut self) -> Option<&'static str> {
+        let term = (self.finish_reason.is_none()).then_some("error");
         self.done = true;
+        term
     }
 }

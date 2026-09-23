@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::mpsc;
 
-use crate::storage::DbTable;
+use crate::storage::{DbTable, add_column_if_missing};
 use serde::Serialize;
 
 // ── Table marker ──────────────────────────────────────────────────────────────
@@ -32,6 +32,10 @@ pub(crate) struct TrafficLogEntry {
     #[serde(rename = "responseBody")]
     pub response_body: Option<String>,
     pub error: Option<String>,
+    /// 响应流的异常终止原因（`error` / `aborted`）。`None` = 正常 EOS。
+    /// 与 `error` 分开：`error` 表示整个请求失败（无响应），`terminated` 表示
+    /// 响应头已返回、但 body 没走完。
+    pub terminated: Option<String>,
     #[serde(rename = "responseChunks", default)]
     pub response_chunks: Vec<ChunkRecord>,
 }
@@ -111,6 +115,18 @@ impl Db {
         self.send(DbCmd::SetTrafficError {
             id,
             error: error.to_string(),
+        })
+    }
+
+    /// 标记响应流异常终止（`reason` = `error` / `aborted`）。
+    pub(crate) fn set_traffic_terminated(
+        &self,
+        id: i64,
+        reason: &str,
+    ) -> Result<(), sqlite::Error> {
+        self.send(DbCmd::SetTrafficTerminated {
+            id,
+            reason: reason.to_string(),
         })
     }
 
@@ -251,6 +267,18 @@ pub(crate) fn do_set_traffic_error(
     Ok(())
 }
 
+pub(crate) fn do_set_traffic_terminated(
+    conn: &sqlite::Connection,
+    id: i64,
+    reason: &str,
+) -> Result<(), sqlite::Error> {
+    let mut stmt = conn.prepare("UPDATE traffic_logs SET terminated = ? WHERE id = ?")?;
+    stmt.bind((1_usize, reason))?;
+    stmt.bind((2_usize, id))?;
+    stmt.next()?;
+    Ok(())
+}
+
 pub(crate) fn do_insert_chunk(
     conn: &sqlite::Connection,
     request_id: i64,
@@ -296,7 +324,7 @@ pub(crate) fn do_load_all_traffic(
     conn: &sqlite::Connection,
 ) -> Result<Vec<TrafficLogEntry>, sqlite::Error> {
     let mut stmt = conn.prepare(
-        "SELECT id, method, uri, request_timestamp, request_headers, request_body, request_query, status, response_timestamp, duration_ms, response_headers, response_body, error FROM traffic_logs ORDER BY request_timestamp DESC",
+        "SELECT id, method, uri, request_timestamp, request_headers, request_body, request_query, status, response_timestamp, duration_ms, response_headers, response_body, error, terminated FROM traffic_logs ORDER BY request_timestamp DESC",
     )?;
     let mut entries = Vec::new();
     while let sqlite::State::Row = stmt.next()? {
@@ -322,6 +350,7 @@ pub(crate) fn do_load_all_traffic(
             response_headers: resp_headers,
             response_body: stmt.read::<Option<String>, _>(11)?,
             error: stmt.read::<Option<String>, _>(12)?,
+            terminated: stmt.read::<Option<String>, _>(13)?,
             response_chunks: Vec::new(),
         });
     }
@@ -349,7 +378,7 @@ pub(crate) fn do_load_traffic_detail(
     id: i64,
 ) -> Result<TrafficLogEntry, sqlite::Error> {
     let mut stmt = conn.prepare(
-        "SELECT id, method, uri, request_timestamp, request_headers, request_body, request_query, status, response_timestamp, duration_ms, response_headers, response_body, error FROM traffic_logs WHERE id = ?",
+        "SELECT id, method, uri, request_timestamp, request_headers, request_body, request_query, status, response_timestamp, duration_ms, response_headers, response_body, error, terminated FROM traffic_logs WHERE id = ?",
     )?;
     stmt.bind((1_usize, id))?;
     if let sqlite::State::Row = stmt.next()? {
@@ -375,6 +404,7 @@ pub(crate) fn do_load_traffic_detail(
             response_headers: resp_headers,
             response_body: stmt.read::<Option<String>, _>(11)?,
             error: stmt.read::<Option<String>, _>(12)?,
+            terminated: stmt.read::<Option<String>, _>(13)?,
             response_chunks: Vec::new(),
         })
     } else {
@@ -403,9 +433,13 @@ impl DbTable for TrafficTable {
                 duration_ms       INTEGER,
                 response_headers  TEXT,
                 response_body     TEXT,
-                error             TEXT
+                error             TEXT,
+                terminated        TEXT
             )",
         )?;
+
+        // 旧库迁移：terminated 列（响应流异常终止标记）在此列引入前建的库里不存在
+        add_column_if_missing(conn, "traffic_logs", "terminated", "TEXT")?;
 
         conn.execute(
             "CREATE TABLE IF NOT EXISTS response_chunks (

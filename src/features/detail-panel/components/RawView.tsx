@@ -1,7 +1,6 @@
-import { CopyButton } from '@/components/core/CopyButton'
+import { CopyButton } from "@/components/core/CopyButton";
 
 export default function RawView({ content }: { content: string }) {
-
   return (
     <div className="flex flex-col h-full">
       <div className="relative min-h-0 flex-1 group/mini">
@@ -14,10 +13,12 @@ export default function RawView({ content }: { content: string }) {
         </div>
         <div className="absolute inset-0 overflow-auto">
           {content ? (
-            <pre className="whitespace-pre-wrap break-all px-3 py-2 text-prose-md text-foreground/80 font-mono">{content}</pre>
+            <pre className="whitespace-pre-wrap break-all px-3 py-2 text-prose-md text-foreground/80 font-mono">
+              {content}
+            </pre>
           ) : null}
         </div>
       </div>
     </div>
-  )
+  );
 }

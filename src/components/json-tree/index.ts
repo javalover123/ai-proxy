@@ -1,1 +1,1 @@
-export { default as JsonTreeView } from './JsonTreeView'
+export { default as JsonTreeView } from "./JsonTreeView";

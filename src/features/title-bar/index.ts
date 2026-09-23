@@ -1,2 +1,2 @@
-export { TitleBar } from './TitleBar'
-export { TabBar } from './TabBar'
+export { TabBar } from "./TabBar";
+export { TitleBar } from "./TitleBar";

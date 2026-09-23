@@ -38,15 +38,19 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      # TODO: add typecheck, lint, test when scripts are added to package.json
-      # - name: TypeScript type check
-      #   run: bun run typecheck
-      # - name: Unit tests
-      #   run: bun run test:unit
+      - name: Biome check
+        run: bun run lint
+
+      - name: Unit tests
+        run: bun run test
 
   backend:
-    name: Backend Checks
-    runs-on: ubuntu-22.04
+    name: Backend Checks (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, windows-2022, macos-14]
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -57,6 +61,7 @@ jobs:
           components: rustfmt, clippy
 
       - name: Install Linux system deps
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
@@ -78,6 +83,7 @@ jobs:
           restore-keys: ${{ runner.os }}-cargo-
 
       - name: Create frontend dist placeholder
+        shell: bash
         run: mkdir -p dist
 
       - name: Check Rust formatting

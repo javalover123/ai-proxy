@@ -72,6 +72,14 @@
     "mergeFormatOpenai": "OpenAI",
     "mergeFormatAnthropic": "Anthropic",
     "errorStatus": "Error",
+    "terminated": {
+      "error": "Truncated",
+      "aborted": "Not fully read"
+    },
+    "terminatedHint": {
+      "error": "The upstream stream failed before finishing — the recorded body is a partial prefix, not the full response.",
+      "aborted": "The response body was closed before the stream ended (downstream disconnected or cancelled); this does not necessarily mean bytes are missing."
+    },
     "console": "Console",
     "noConsole": "No console output",
     "decryptPrompt": "Response was not decrypted — content cannot be viewed.",
@@ -88,7 +96,10 @@
     "proxyTab": "Proxy",
     "listenHost": "Listen Host",
     "listenPort": "Listen Port",
-    "upstreamProxy": "Use system proxy for upstream requests",
+    "upstreamProxyHost": "Upstream Proxy",
+    "upstreamProxyPort": "Proxy Port",
+    "upstreamProxyHostPlaceholder": "Empty for direct connection",
+    "upstreamProxyHint": "Upstream requests are forwarded through this proxy; unchecked or an empty address means a direct connection. Applies to decrypted traffic only.",
     "theme": "Theme",
     "language": "Language",
     "proseFontSize": "Content font size",
@@ -253,6 +264,14 @@
   },
   "aiView": {
     "waiting": "Waiting for normalized data…",
+    "terminated": {
+      "error": "Stream failed — content incomplete",
+      "aborted": "Stream not fully read — content may be incomplete"
+    },
+    "terminatedHint": {
+      "error": "The upstream stream failed before finishing; what was recorded for this turn is a partial prefix.",
+      "aborted": "The response body was closed before the stream ended (downstream disconnected or cancelled); this does not necessarily mean bytes are missing."
+    },
     "jumpToProxy": "View in proxy",
     "copyCurl": "Copy cURL",
     "thinking": "Thinking",
@@ -264,8 +283,17 @@
     "toolCallResult": "Result",
     "toolCallExpandAll": "Expand all",
     "toolCallCollapse": "Collapse",
+    "toolDefBuiltin": "built-in",
+    "toolDefsRawJson": "View raw JSON",
     "importToEditor": "Import to Editor",
-    "toolCallsSummary": "{{count}} call(s) · {{reqs}} request(s)"
+    "toolCallsSummary": "{{count}} call(s) · {{reqs}} request(s)",
+    "openLinkTitle": "Open external link?",
+    "openLinkDesc": "This link comes from untrusted Markdown content. Confirm the destination.",
+    "openLink": "Open link",
+    "openLinkFailed": "Failed to open link"
+  },
+  "common": {
+    "cancel": "Cancel"
   },
   "requestEditor": {
     "params": "Params",

@@ -1,22 +1,22 @@
-import { type TypeFilter } from '@/lib/format'
-import { TrafficLog } from './traffic-log'
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import { TypeFilterBar } from './TypeFilterBar'
-import type { TrafficEntry, ProxyJumpTarget } from '@/types/proxy'
-import type { DetailPosition } from '@/features/bottom-bar'
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import type { DetailPosition } from "@/features/bottom-bar";
+import type { TypeFilter } from "@/lib/format";
+import type { ProxyJumpTarget, TrafficEntry } from "@/types/proxy";
+import { TypeFilterBar } from "./TypeFilterBar";
+import { TrafficLog } from "./traffic-log";
 
 interface ProxyViewProps {
-  entries: TrafficEntry[]
-  error: string
-  showSidebar: boolean
-  detailPosition: DetailPosition
-  onAutoOpenDetail: () => void
-  typeFilter: TypeFilter
-  typeCounts: Map<TypeFilter, number>
-  onTypeFilterChange: (f: TypeFilter) => void
-  running: boolean
-  status: string
-  jumpTarget?: ProxyJumpTarget | null
+  entries: TrafficEntry[];
+  error: string;
+  showSidebar: boolean;
+  detailPosition: DetailPosition;
+  onAutoOpenDetail: () => void;
+  typeFilter: TypeFilter;
+  typeCounts: Map<TypeFilter, number>;
+  onTypeFilterChange: (f: TypeFilter) => void;
+  running: boolean;
+  status: string;
+  jumpTarget?: ProxyJumpTarget | null;
 }
 
 export function ProxyView({
@@ -55,5 +55,5 @@ export function ProxyView({
         jumpTarget={jumpTarget}
       />
     </>
-  )
+  );
 }

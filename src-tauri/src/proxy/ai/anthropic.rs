@@ -5,7 +5,9 @@ use std::collections::BTreeMap;
 
 use serde_json::Value;
 
-use super::normalize::{AiContentBlock, AiConversation, AiTurn, AiUsage, normalize_usage};
+use super::normalize::{
+    AiContentBlock, AiConversation, AiToolDef, AiTurn, AiUsage, normalize_usage, opt_string,
+};
 use super::{AiProtocol, StreamState};
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -40,7 +42,7 @@ impl AiProtocol for AnthropicProtocol {
         if let Some(t) = p
             .get("tools")
             .and_then(Value::as_array)
-            .and_then(|ts| AiTurn::tools_def(ts))
+            .and_then(|ts| AiTurn::tool_defs(ts.iter().map(anthropic_tool_def).collect()))
         {
             turns.push(t);
         }
@@ -235,6 +237,25 @@ fn blocks_to_text(blocks: &[Value]) -> String {
         .filter_map(|b| b.get("text").and_then(Value::as_str))
         .collect::<Vec<_>>()
         .join("")
+}
+
+/// Anthropic 单个工具项 → [`AiToolDef`]。
+/// 函数工具形如 `{name, description, input_schema}`（`type` 缺省或 `"custom"`）；
+/// 带其他 `type` 的是内置工具（`web_search_20250305` / `text_editor_20250124` /
+/// `computer_20241022` …），各自带专属配置字段，整项落 `Raw` 不做归一。
+fn anthropic_tool_def(v: &Value) -> AiToolDef {
+    match v.get("type").and_then(Value::as_str) {
+        None | Some("custom") => {}
+        Some(_) => return AiToolDef::Raw { json: v.clone() },
+    }
+    match v.get("name").and_then(Value::as_str) {
+        Some(name) if !name.is_empty() => AiToolDef::Function {
+            name: name.to_string(),
+            description: opt_string(v.get("description")),
+            parameters: v.get("input_schema").cloned(),
+        },
+        _ => AiToolDef::Raw { json: v.clone() },
+    }
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -461,7 +482,9 @@ impl StreamState for AnthropicStreamState {
         )
     }
 
-    fn finalize(&mut self) {
-        self.saw_message_stop = true;
+    fn finalize(&mut self) -> Option<&'static str> {
+        // 没收到 message_stop 说明流没干净收尾（中途 event: error 被吞、或断流），
+        // 别再把半截流伪装成干净完成。
+        (!self.saw_message_stop).then_some("error")
     }
 }

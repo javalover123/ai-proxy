@@ -1,1 +1,1 @@
-export { BottomBar, type DetailPosition } from './BottomBar'
+export { BottomBar, type DetailPosition } from "./BottomBar";

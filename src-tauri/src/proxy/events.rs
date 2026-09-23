@@ -34,6 +34,13 @@ pub(crate) enum ProxyEvent {
         id: u64,
         chunk: String,
     },
+    /// 响应流终止。`terminated` 缺省表示正常 EOS；否则为终止原因
+    /// （`error` = 上游流中途出错，body 残缺；`aborted` = 下游未读完就断开）。
+    ResponseEnd {
+        id: u64,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        terminated: Option<String>,
+    },
     Error {
         id: u64,
         error: String,
@@ -53,6 +60,10 @@ pub(crate) enum ProxyEvent {
         model: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
         finish_reason: Option<String>,
+        /// 代理侧观测到的异常终止（`error` / `aborted`）。与 `finish_reason` 分开：
+        /// 后者只装上游说的话，截断时上游本就没说。
+        #[serde(skip_serializing_if = "Option::is_none")]
+        terminated: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
         first_chunk_ms: Option<u64>,
         #[serde(skip_serializing_if = "Option::is_none")]

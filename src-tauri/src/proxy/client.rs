@@ -7,6 +7,8 @@ use rama::http::layer::map_response_body::MapResponseBodyLayer;
 use rama::http::layer::timeout::{ResponseBodyTimeoutLayer, TimeoutLayer};
 use rama::http::{Request, Response, StatusCode, Version};
 use rama::layer::Layer;
+use rama::net::address::ProxyAddress;
+use rama::net::client::ProxyAddressLayer;
 use rama::rt::Executor;
 use rama::service::BoxService;
 use rama::service::Service;
@@ -33,25 +35,27 @@ pub(crate) async fn forward_to_upstream(req: Request) -> Result<Response, BoxErr
 }
 
 pub(crate) fn build_upstream_service(
-    upstream_proxy: bool,
+    upstream_proxy: Option<ProxyAddress>,
     skip_tls_verify: bool,
 ) -> BoxService<Request, Response, BoxError> {
+    // 代理地址来自运行时配置，不参与缓存：只把 client 按 skip_tls_verify 缓存两份，
+    // 每次调用外挂一层 ProxyAddressLayer（往 extensions 写 ProxyRoute）。
+    // 连接池的分组标识 HttpConnIdentifier 已包含所选路由，
+    // 因此同一个池不会把不同代理（或代理与直连）的连接串用。
+    ProxyAddressLayer::maybe(upstream_proxy)
+        .into_layer(cached_client(skip_tls_verify))
+        .boxed()
+}
+
+/// 上游 client（含超时/解压/流标准化），按 `skip_tls_verify` 缓存，首次调用时构建。
+fn cached_client(skip_tls_verify: bool) -> BoxService<Request, Response, BoxError> {
     use std::sync::OnceLock;
 
-    /// 用两位 bool 索引 4 种组合，一次写入后无锁命中。
-    fn cache_key(up: bool, skip: bool) -> usize {
-        ((up as usize) << 1) | (skip as usize)
-    }
+    static CACHE: [OnceLock<BoxService<Request, Response, BoxError>>; 2] =
+        [OnceLock::new(), OnceLock::new()];
 
-    static CACHE: [OnceLock<BoxService<Request, Response, BoxError>>; 4] = [
-        OnceLock::new(),
-        OnceLock::new(),
-        OnceLock::new(),
-        OnceLock::new(),
-    ];
-
-    let idx = cache_key(upstream_proxy, skip_tls_verify);
-    if let Some(svc) = CACHE[idx].get() {
+    let slot = &CACHE[usize::from(skip_tls_verify)];
+    if let Some(svc) = slot.get() {
         return svc.clone();
     }
 
@@ -62,27 +66,17 @@ pub(crate) fn build_upstream_service(
         TlsClientConfig::default_http()
     };
 
-    let client = if upstream_proxy {
-        EasyHttpWebClient::connector_builder()
-            .with_default_transport_connector()
-            .with_default_dns_connector()
-            .with_tls_proxy_support_using_rustls()
-            .with_proxy_support()
-            .with_tls_support_using_rustls_and_default_http_version(tls_config, Version::HTTP_11)
-            .with_default_http_connector(Executor::default())
-            .with_default_connection_pool()
-            .build_client()
-    } else {
-        EasyHttpWebClient::connector_builder()
-            .with_default_transport_connector()
-            .with_default_dns_connector()
-            .with_tls_proxy_support_using_rustls()
-            .without_proxy_support()
-            .with_tls_support_using_rustls_and_default_http_version(tls_config, Version::HTTP_11)
-            .with_default_http_connector(Executor::default())
-            .with_default_connection_pool()
-            .build_client()
-    };
+    // with_proxy_support 装的是 HttpProxyConnector::optional：
+    // 没有 ProxyRoute 时直接回落直连，所以无需再区分「带代理/不带代理」两种 client。
+    let client = EasyHttpWebClient::connector_builder()
+        .with_default_transport_connector()
+        .with_default_dns_connector()
+        .with_tls_proxy_support_using_rustls()
+        .with_proxy_support()
+        .with_tls_support_using_rustls_and_default_http_version(tls_config, Version::HTTP_11)
+        .with_default_http_connector(Executor::default())
+        .with_default_connection_pool()
+        .build_client();
 
     let svc = (
         MapResponseBodyLayer::new_boxed_streaming_body(),
@@ -97,5 +91,5 @@ pub(crate) fn build_upstream_service(
         .boxed();
 
     // get_or_init：多个请求竞争时只有第一个构建，其余等待后复用。
-    CACHE[idx].get_or_init(|| svc).clone()
+    slot.get_or_init(|| svc).clone()
 }

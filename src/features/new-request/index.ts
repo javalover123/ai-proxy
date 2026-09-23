@@ -1,1 +1,1 @@
-export { NewRequestView } from './NewRequestView'
+export { NewRequestView } from "./NewRequestView";

@@ -1,108 +1,115 @@
-import { useState, useMemo } from 'react'
-import { useTranslation } from 'react-i18next'
-import { ChevronRight, ChevronDown, ListChecks } from 'lucide-react'
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
-import { CopyButton } from '@/components/core/CopyButton'
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
-import { Empty, EmptyTitle } from '@/components/core/Empty'
-import type { TrafficEntry } from '@/types/proxy'
-import { parseSse, isStreamingContentType, mergeSseMessages, estimateTokens, extractTokenUsage, type SseEvent, type MergeFormat, type MergeResult, type TokenUsage } from '@/lib/sse'
+import { ChevronDown, ChevronRight, ListChecks } from "lucide-react";
+import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { CopyButton } from "@/components/core/CopyButton";
+import { Empty, EmptyTitle } from "@/components/core/Empty";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  estimateTokens,
+  extractTokenUsage,
+  isStreamingContentType,
+  type MergeFormat,
+  type MergeResult,
+  mergeSseMessages,
+  parseSse,
+  type SseEvent,
+  type TokenUsage,
+} from "@/lib/sse";
+import type { TrafficEntry } from "@/types/proxy";
 
-
-type ViewMode = 'chunks' | 'events' | 'merged'
+type ViewMode = "chunks" | "events" | "merged";
 
 interface Props {
-  entry: TrafficEntry
-  onClose?: () => void
+  entry: TrafficEntry;
+  onClose?: () => void;
 }
 
 const MERGE_FORMATS: { value: MergeFormat; labelKey: string }[] = [
-  { value: 'openai', labelKey: 'detail.mergeFormatOpenai' },
-  { value: 'anthropic', labelKey: 'detail.mergeFormatAnthropic' },
-]
+  { value: "openai", labelKey: "detail.mergeFormatOpenai" },
+  { value: "anthropic", labelKey: "detail.mergeFormatAnthropic" },
+];
 
 export default function StreamingViewer({ entry }: Props) {
-  const { t } = useTranslation()
-  const [view, setView] = useState<ViewMode>('chunks')
-  const [mergeFormat, setMergeFormat] = useState<MergeFormat>('openai')
+  const { t } = useTranslation();
+  const [view, setView] = useState<ViewMode>("chunks");
+  const [mergeFormat, setMergeFormat] = useState<MergeFormat>("openai");
 
-  const isSse = isStreamingContentType(entry.responseHeaders)
-  const chunks = entry.responseChunks ?? []
+  const isSse = isStreamingContentType(entry.responseHeaders);
+  const chunks = entry.responseChunks ?? [];
 
   const sseEvents = useMemo(() => {
-    const body = chunks.join('')
-    if (!isSse || !body) return []
-    return parseSse(body)
-  }, [isSse, chunks])
+    const body = chunks.join("");
+    if (!isSse || !body) return [];
+    return parseSse(body);
+  }, [isSse, chunks]);
 
   const mergedResult = useMemo(() => {
-    if (!isSse || sseEvents.length === 0) return null
-    return mergeSseMessages(sseEvents, mergeFormat)
-  }, [isSse, sseEvents, mergeFormat])
+    if (!isSse || sseEvents.length === 0) return null;
+    return mergeSseMessages(sseEvents, mergeFormat);
+  }, [isSse, sseEvents, mergeFormat]);
 
   const tokenUsage = useMemo(() => {
-    if (!isSse) return null
-    return extractTokenUsage(sseEvents)
-  }, [isSse, sseEvents])
+    if (!isSse) return null;
+    return extractTokenUsage(sseEvents);
+  }, [isSse, sseEvents]);
 
   const chunkStats = useMemo(() => {
-    let totalBytes = 0
-    for (const c of chunks) totalBytes += c.length
-    return { count: chunks.length, totalBytes }
-  }, [chunks])
+    let totalBytes = 0;
+    for (const c of chunks) totalBytes += c.length;
+    return { count: chunks.length, totalBytes };
+  }, [chunks]);
 
-  const hasMerged = mergedResult !== null && mergedResult.content.length > 0
+  const hasMerged = mergedResult !== null && mergedResult.content.length > 0;
 
-  const tabValue = view
+  const tabValue = view;
 
   return (
-    <Tabs value={tabValue} onValueChange={(v) => setView(v as ViewMode)} className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <TabsList variant="line" className="sticky top-0 z-10 shrink-0 justify-start border-b border-surface-elevated bg-surface-base px-0 rounded-none">
+    <Tabs
+      value={tabValue}
+      onValueChange={(v) => setView(v as ViewMode)}
+      className="flex min-h-0 min-w-0 flex-1 flex-col"
+    >
+      <TabsList
+        variant="line"
+        className="sticky top-0 z-10 shrink-0 justify-start border-b border-surface-elevated bg-surface-base px-0 rounded-none"
+      >
         <Tooltip>
           <TooltipTrigger className="inline-flex">
-            <TabsTrigger
-              value="chunks"
-              className="text-ui-sm"
-            >
-              {t('detail.streamChunks')}
+            <TabsTrigger value="chunks" className="text-ui-sm">
+              {t("detail.streamChunks")}
             </TabsTrigger>
           </TooltipTrigger>
           <TooltipContent side="top" className="bg-popover text-popover-foreground text-ui-sm">
-            {chunkStats.count} {t('detail.streamChunks')} · {chunkStats.totalBytes} B
+            {chunkStats.count} {t("detail.streamChunks")} · {chunkStats.totalBytes} B
           </TooltipContent>
         </Tooltip>
         {isSse && (
           <Tooltip>
             <TooltipTrigger className="inline-flex">
-              <TabsTrigger
-                value="events"
-                className="text-ui-sm"
-              >
-                {t('detail.streamEvents')}
+              <TabsTrigger value="events" className="text-ui-sm">
+                {t("detail.streamEvents")}
               </TabsTrigger>
             </TooltipTrigger>
             <TooltipContent side="top" className="bg-popover text-popover-foreground text-ui-sm">
-              {sseEvents.length} {t('detail.streamEvents')}
+              {sseEvents.length} {t("detail.streamEvents")}
             </TooltipContent>
           </Tooltip>
         )}
         {isSse && hasMerged && (
           <Tooltip>
             <TooltipTrigger className="inline-flex">
-              <TabsTrigger
-                value="merged"
-                className="text-ui-sm"
-              >
-                {t('detail.streamMerged')}
+              <TabsTrigger value="merged" className="text-ui-sm">
+                {t("detail.streamMerged")}
               </TabsTrigger>
             </TooltipTrigger>
             <TooltipContent side="top" className="bg-popover text-popover-foreground text-ui-sm">
-              {mergedResult!.eventCount} {t('detail.streamEvents')} → {t('detail.streamMerged')}
+              {mergedResult!.eventCount} {t("detail.streamEvents")} → {t("detail.streamMerged")}
             </TooltipContent>
           </Tooltip>
         )}
         {/* 合并选项：选中合并 Tab 时显示在同一行 */}
-        {view === 'merged' && hasMerged && (
+        {view === "merged" && hasMerged && (
           <div className="ml-auto flex items-center gap-1.5 px-2">
             <span className="flex items-center gap-1 text-ui-xs text-muted-foreground/60">
               <ListChecks className="size-2.5" />
@@ -127,18 +134,22 @@ export default function StreamingViewer({ entry }: Props) {
 
       <TabsContent value="chunks" className="mt-0">
         {chunks.length === 0 ? (
-          <Empty><EmptyTitle>{t('detail.noStreamData')}</EmptyTitle></Empty>
+          <Empty>
+            <EmptyTitle>{t("detail.noStreamData")}</EmptyTitle>
+          </Empty>
         ) : (
-          chunks.map((chunk, idx) => (
-            <ChunkItem key={idx} index={idx} data={chunk} />
-          ))
+          // biome-ignore lint/suspicious/noArrayIndexKey: append-only log
+          chunks.map((chunk, idx) => <ChunkItem key={idx} index={idx} data={chunk} />)
         )}
       </TabsContent>
 
       <TabsContent value="events" className="mt-0">
         {sseEvents.length === 0 ? (
-          <Empty><EmptyTitle>{t('detail.noSseEvents')}</EmptyTitle></Empty>
+          <Empty>
+            <EmptyTitle>{t("detail.noSseEvents")}</EmptyTitle>
+          </Empty>
         ) : (
+          // biome-ignore lint/suspicious/noArrayIndexKey: append-only log
           sseEvents.map((evt, idx) => <SseEventItem key={idx} index={idx} event={evt} />)
         )}
       </TabsContent>
@@ -147,19 +158,21 @@ export default function StreamingViewer({ entry }: Props) {
         {mergedResult ? (
           <MergedView result={mergedResult} tokenUsage={tokenUsage} />
         ) : (
-          <Empty><EmptyTitle>{t('detail.noSseEvents')}</EmptyTitle></Empty>
+          <Empty>
+            <EmptyTitle>{t("detail.noSseEvents")}</EmptyTitle>
+          </Empty>
         )}
       </TabsContent>
     </Tabs>
-  )
+  );
 }
 
 // -------------------------------------------------------------------
 // MergedView — 合并消息展示
 // -------------------------------------------------------------------
 function MergedView({ result, tokenUsage }: { result: MergeResult; tokenUsage: TokenUsage | null }) {
-  const { t } = useTranslation()
-  const estTokens = useMemo(() => estimateTokens(result.content), [result.content])
+  const { t } = useTranslation();
+  const estTokens = useMemo(() => estimateTokens(result.content), [result.content]);
 
   return (
     <div className="flex flex-col h-full">
@@ -173,14 +186,12 @@ function MergedView({ result, tokenUsage }: { result: MergeResult; tokenUsage: T
             />
           </TooltipTrigger>
           <TooltipContent side="left" className="bg-popover text-popover-foreground text-ui-sm">
-            {t('detail.copyUri')}
+            {t("detail.copyUri")}
           </TooltipContent>
         </Tooltip>
         {/* Token — 右下角固定 */}
         <div className="absolute bottom-1.5 right-2 z-10 flex items-center gap-1.5 rounded bg-background/70 px-1.5 py-0.5 text-ui-xs text-muted-foreground/60 tabular-nums backdrop-blur-sm select-none">
-          <span>
-            {tokenUsage?.totalTokens != null ? tokenUsage.totalTokens : '\u2248' + estTokens} tokens
-          </span>
+          <span>{tokenUsage?.totalTokens != null ? tokenUsage.totalTokens : `\u2248${estTokens}`} tokens</span>
           {tokenUsage?.totalTokens == null && <span className="text-muted-foreground/40">（估）</span>}
           {tokenUsage?.cachedTokens != null && tokenUsage.cachedTokens > 0 && (
             <>
@@ -195,36 +206,34 @@ function MergedView({ result, tokenUsage }: { result: MergeResult; tokenUsage: T
             </>
           )}
         </div>
-        <pre className="overflow-x-auto whitespace-pre-wrap break-all px-3 py-2 pb-7 font-mono text-prose-md leading-6 text-foreground/80">{result.formatted}</pre>
+        <pre className="overflow-x-auto whitespace-pre-wrap break-all px-3 py-2 pb-7 font-mono text-prose-md leading-6 text-foreground/80">
+          {result.formatted}
+        </pre>
       </div>
     </div>
-  )
+  );
 }
 
 // -------------------------------------------------------------------
 // ChunkItem
 // -------------------------------------------------------------------
-function ChunkItem({
-  index,
-  data,
-}: {
-  index: number
-  data: string
-}) {
-  const [expanded, setExpanded] = useState(false)
-  const trimmed = data.replace(/\n$/, '')
+function ChunkItem({ index, data }: { index: number; data: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const trimmed = data.replace(/\n$/, "");
   // Detect [DONE] marker
-  const isDone = trimmed.trim() === '[DONE]'
+  const isDone = trimmed.trim() === "[DONE]";
 
   return (
     <div
       className={`border-b border-surface-elevated/30 transition-colors hover:bg-surface-elevated/10 ${
-        isDone ? 'opacity-60' : ''
-      }`}>
+        isDone ? "opacity-60" : ""
+      }`}
+    >
       {/* Summary line */}
       <button
-        onClick={() => setExpanded(e => !e)}
-        className="flex w-full items-start gap-1.5 px-3 py-1.5 text-left text-prose-md">
+        onClick={() => setExpanded((e) => !e)}
+        className="flex w-full items-start gap-1.5 px-3 py-1.5 text-left text-prose-md"
+      >
         {expanded ? (
           <ChevronDown className="mt-0.5 size-3 shrink-0 text-muted-foreground/60" />
         ) : (
@@ -234,7 +243,7 @@ function ChunkItem({
         <span className="shrink-0 text-muted-foreground tabular-nums">{data.length} B</span>
         <span className="min-w-0 flex-1 truncate text-muted-foreground/70 font-mono">
           {trimmed.slice(0, 120)}
-          {trimmed.length > 120 ? '...' : ''}
+          {trimmed.length > 120 ? "..." : ""}
         </span>
         {isDone && (
           <span className="shrink-0 rounded bg-amber-500/10 px-1.5 py-0.5 text-ui-xs font-medium text-amber-600 dark:text-amber-400">
@@ -250,14 +259,13 @@ function ChunkItem({
         </div>
       )}
     </div>
-  )
+  );
 }
 
 // -------------------------------------------------------------------
 // ChunkContent — 显示带复制功能的 chunk 内容
 // -------------------------------------------------------------------
 function ChunkContent({ data }: { data: string }) {
-
   return (
     <div className="group relative">
       <span className="absolute right-1 top-1 z-10 opacity-0 group-hover:opacity-100 transition-all">
@@ -267,38 +275,41 @@ function ChunkContent({ data }: { data: string }) {
           className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-surface-elevated/50"
         />
       </span>
-      <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded px-3 py-2 font-mono text-prose-sm leading-5 text-foreground/80">{data}</pre>
+      <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded px-3 py-2 font-mono text-prose-sm leading-5 text-foreground/80">
+        {data}
+      </pre>
     </div>
-  )
+  );
 }
 
 // -------------------------------------------------------------------
 // SseEventItem
 // -------------------------------------------------------------------
 function SseEventItem({ index, event }: { index: number; event: SseEvent }) {
-
-  const [expanded, setExpanded] = useState(false)
+  const [expanded, setExpanded] = useState(false);
   const formattedData = useMemo(() => {
     try {
-      const parsed = JSON.parse(event.data)
-      return JSON.stringify(parsed, null, 2)
+      const parsed = JSON.parse(event.data);
+      return JSON.stringify(parsed, null, 2);
     } catch {
-      return event.data
+      return event.data;
     }
-  }, [event.data])
+  }, [event.data]);
 
   // Detect [DONE] marker
-  const isDone = event.data.trim() === '[DONE]'
+  const isDone = event.data.trim() === "[DONE]";
 
   return (
     <div
       className={`border-b border-surface-elevated/30 transition-colors hover:bg-surface-elevated/5 ${
-        isDone ? 'opacity-50' : ''
-      }`}>
+        isDone ? "opacity-50" : ""
+      }`}
+    >
       {/* Summary line */}
       <button
-        onClick={() => setExpanded(e => !e)}
-        className="flex w-full items-start gap-1.5 px-3 py-1.5 text-left text-prose-md">
+        onClick={() => setExpanded((e) => !e)}
+        className="flex w-full items-start gap-1.5 px-3 py-1.5 text-left text-prose-md"
+      >
         {expanded ? (
           <ChevronDown className="mt-0.5 size-3 shrink-0 text-muted-foreground/60" />
         ) : (
@@ -308,18 +319,12 @@ function SseEventItem({ index, event }: { index: number; event: SseEvent }) {
         <span className="shrink-0 rounded bg-primary/10 px-1.5 py-0.5 text-ui-xs font-medium text-foreground">
           {event.event}
         </span>
-        {event.id && (
-          <span className="shrink-0 text-muted-foreground/70 font-mono tabular-nums">
-            id: {event.id}
-          </span>
-        )}
+        {event.id && <span className="shrink-0 text-muted-foreground/70 font-mono tabular-nums">id: {event.id}</span>}
         <span className="min-w-0 flex-1 truncate text-muted-foreground/50 font-mono">
-          {isDone ? '[DONE]' : event.data.slice(0, 80) + (event.data.length > 80 ? '...' : '')}
+          {isDone ? "[DONE]" : event.data.slice(0, 80) + (event.data.length > 80 ? "..." : "")}
         </span>
         {!isDone && event.data.length > 80 && (
-          <span className="shrink-0 text-muted-foreground/40 text-ui-xs">
-            {event.data.length} B
-          </span>
+          <span className="shrink-0 text-muted-foreground/40 text-ui-xs">{event.data.length} B</span>
         )}
       </button>
 
@@ -333,9 +338,11 @@ function SseEventItem({ index, event }: { index: number; event: SseEvent }) {
               className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-surface-elevated/50"
             />
           </span>
-          <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded px-3 py-1 font-mono text-prose-sm leading-5 text-foreground/80">{formattedData}</pre>
+          <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded px-3 py-1 font-mono text-prose-sm leading-5 text-foreground/80">
+            {formattedData}
+          </pre>
         </div>
       )}
     </div>
-  )
+  );
 }

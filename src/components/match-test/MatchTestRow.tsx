@@ -1,19 +1,19 @@
-import { CheckIcon, XIcon, ZapIcon } from 'lucide-react'
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { CheckIcon, XIcon, ZapIcon } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface Props {
-  value: string
-  onChange: (value: string) => void
-  placeholder: string
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
   /** 「测试」按钮文案 */
-  runLabel: string
-  onRun: () => void
+  runLabel: string;
+  onRun: () => void;
   /** null = 尚未测试或结果已失效；true/false = 是否有已启用规则命中 */
-  hit: boolean | null
+  hit: boolean | null;
   /** ✓/✗ 图标的悬浮提示（如「命中 2 条」） */
-  title?: string
+  title?: string;
 }
 
 /**
@@ -29,7 +29,7 @@ export function MatchTestRow({ value, onChange, placeholder, runLabel, onRun, hi
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === 'Enter') onRun()
+          if (e.key === "Enter") onRun();
         }}
         placeholder={placeholder}
         spellCheck={false}
@@ -39,7 +39,7 @@ export function MatchTestRow({ value, onChange, placeholder, runLabel, onRun, hi
           <TooltipTrigger className="shrink-0 inline-flex">
             <span>
               {hit ? (
-                <CheckIcon className="size-3.5" style={{ color: 'var(--badge-success)' }} />
+                <CheckIcon className="size-3.5" style={{ color: "var(--badge-success)" }} />
               ) : (
                 <XIcon className="size-3.5 text-muted-foreground" />
               )}
@@ -52,21 +52,15 @@ export function MatchTestRow({ value, onChange, placeholder, runLabel, onRun, hi
       ) : hit !== null ? (
         <span className="shrink-0">
           {hit ? (
-            <CheckIcon className="size-3.5" style={{ color: 'var(--badge-success)' }} />
+            <CheckIcon className="size-3.5" style={{ color: "var(--badge-success)" }} />
           ) : (
             <XIcon className="size-3.5 text-muted-foreground" />
           )}
         </span>
       ) : null}
-      <Button
-        variant="ghost"
-        size="xs"
-        className="shrink-0"
-        disabled={value.trim() === ''}
-        onClick={onRun}
-      >
+      <Button variant="ghost" size="xs" className="shrink-0" disabled={value.trim() === ""} onClick={onRun}>
         {runLabel}
       </Button>
     </div>
-  )
+  );
 }

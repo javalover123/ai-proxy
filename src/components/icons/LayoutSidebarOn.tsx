@@ -1,5 +1,5 @@
 interface Props {
-  className?: string
+  className?: string;
 }
 
 export function LayoutSidebarOn({ className }: Props) {
@@ -9,5 +9,5 @@ export function LayoutSidebarOn({ className }: Props) {
       <line x1="5.5" y1="0" x2="5.5" y2="16" strokeOpacity={0.25} strokeWidth="1" />
       <rect x="7" y="0" width="13" height="16" rx="2" fillOpacity={0} strokeOpacity={0.45} strokeWidth="1" />
     </svg>
-  )
+  );
 }

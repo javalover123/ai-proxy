@@ -1,6 +1,0 @@
-# Comet 项目级配置（仓库根，非 change 状态文件）
-# guard/verify 读取此处的构建/验证命令，覆盖默认的 npm 探测。
-# 本项目：后端 Rust（cargo）+ 前端 bun，不使用 npm。
-# 用 cargo check 而非 build：不链接 .exe，避免 dev 运行时占用导致的 Windows 文件锁。
-build_command: cargo check --manifest-path src-tauri/Cargo.toml
-

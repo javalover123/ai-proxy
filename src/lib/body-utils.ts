@@ -1,17 +1,17 @@
 // src/lib/body-utils.ts — body 解析/序列化工具
 // urlencoded 和 multipart body 在存储层都是字符串，KV 编辑器在显示时解析、变更时序列化
 
-import type { KeyValuePair, BodyType, RequestBody, FormDataPart } from '@/types/collection'
+import type { BodyType, FormDataPart, KeyValuePair, RequestBody } from "@/types/collection";
 
 // ---------------------------------------------------------------------------
 // FormDataEntry
 // ---------------------------------------------------------------------------
 
 export interface FormDataEntry {
-  key: string
-  value: string
-  enabled: boolean
-  type: 'text' | 'file'
+  key: string;
+  value: string;
+  enabled: boolean;
+  type: "text" | "file";
 }
 
 // ---------------------------------------------------------------------------
@@ -26,27 +26,27 @@ export interface FormDataEntry {
  * 避免把 Raw 类型的内容误当 urlencoded 解析。
  */
 export function parseUrlEncoded(body: string): KeyValuePair[] {
-  const trimmed = body.trim()
-  if (!trimmed) return []
+  const trimmed = body.trim();
+  if (!trimmed) return [];
   // 明显的非 urlencoded 内容：JSON、XML、或纯文本
-  if (trimmed.startsWith('{') || trimmed.startsWith('[') || trimmed.startsWith('<')) return []
+  if (trimmed.startsWith("{") || trimmed.startsWith("[") || trimmed.startsWith("<")) return [];
   // 至少包含一个 = 才算合法的 KV 对
-  if (!trimmed.includes('=')) return []
+  if (!trimmed.includes("=")) return [];
   try {
-    return trimmed.split('&').map(pair => {
-      const eqIdx = pair.indexOf('=')
+    return trimmed.split("&").map((pair) => {
+      const eqIdx = pair.indexOf("=");
       if (eqIdx < 0) {
-        return { key: decodeURIComponent(pair), value: '', enabled: true }
+        return { key: decodeURIComponent(pair), value: "", enabled: true };
       }
       return {
         key: decodeURIComponent(pair.substring(0, eqIdx)),
         value: decodeURIComponent(pair.substring(eqIdx + 1)),
         enabled: true,
-      }
-    })
+      };
+    });
   } catch {
     // 解码失败时返回空数组
-    return []
+    return [];
   }
 }
 
@@ -58,9 +58,9 @@ export function parseUrlEncoded(body: string): KeyValuePair[] {
  */
 export function serializeUrlEncoded(entries: KeyValuePair[]): string {
   return entries
-    .filter(e => e.enabled !== false)
-    .map(e => `${encodeURIComponent(e.key.trim())}=${encodeURIComponent(e.value)}`)
-    .join('&')
+    .filter((e) => e.enabled !== false)
+    .map((e) => `${encodeURIComponent(e.key.trim())}=${encodeURIComponent(e.value)}`)
+    .join("&");
 }
 
 // ---------------------------------------------------------------------------
@@ -72,20 +72,20 @@ export function serializeUrlEncoded(entries: KeyValuePair[]): string {
  * "[{key,value,type,enabled}]" → FormDataEntry[]
  */
 export function parseFormDataBody(body: string): FormDataEntry[] {
-  if (!body.trim()) return []
+  if (!body.trim()) return [];
   try {
-    const parsed = JSON.parse(body)
-    if (!Array.isArray(parsed)) return []
+    const parsed = JSON.parse(body);
+    if (!Array.isArray(parsed)) return [];
     return parsed
-      .filter((e: unknown): e is Record<string, unknown> => typeof e === 'object' && e !== null)
-      .map(e => ({
-        key: String(e.key ?? ''),
-        value: String(e.value ?? ''),
+      .filter((e: unknown): e is Record<string, unknown> => typeof e === "object" && e !== null)
+      .map((e) => ({
+        key: String(e.key ?? ""),
+        value: String(e.value ?? ""),
         enabled: e.enabled !== false,
-        type: (e.type === 'file' ? 'file' : 'text') as 'text' | 'file',
-      }))
+        type: (e.type === "file" ? "file" : "text") as "text" | "file",
+      }));
   } catch {
-    return []
+    return [];
   }
 }
 
@@ -93,7 +93,7 @@ export function parseFormDataBody(body: string): FormDataEntry[] {
  * 将 FormDataEntry[] 序列化为 JSON 数组字符串
  */
 export function serializeFormDataBody(entries: FormDataEntry[]): string {
-  return JSON.stringify(entries)
+  return JSON.stringify(entries);
 }
 
 // ---------------------------------------------------------------------------
@@ -111,34 +111,32 @@ export function serializeFormDataBody(entries: FormDataEntry[]): string {
  * multipart 的 MIME 构建由 Rust 后端完成。
  */
 export function buildSendBody(bodyType: BodyType, body: string): RequestBody {
-  if (!body) return null
+  if (!body) return null;
 
   switch (bodyType) {
-    case 'none':
-      return null
+    case "none":
+      return null;
 
-    case 'json':
-      return { mode: 'raw', content: body, language: 'json' }
+    case "json":
+      return { mode: "raw", content: body, language: "json" };
 
-    case 'xml':
-      return { mode: 'raw', content: body, language: 'xml' }
+    case "xml":
+      return { mode: "raw", content: body, language: "xml" };
 
-    case 'urlencoded': {
-      const encoded = serializeUrlEncoded(
-        parseUrlEncoded(body).filter(p => p.enabled !== false && p.key.trim()),
-      )
-      return encoded ? { mode: 'raw', content: encoded, language: 'urlencoded' } : null
+    case "urlencoded": {
+      const encoded = serializeUrlEncoded(parseUrlEncoded(body).filter((p) => p.enabled !== false && p.key.trim()));
+      return encoded ? { mode: "raw", content: encoded, language: "urlencoded" } : null;
     }
 
-    case 'multipart': {
+    case "multipart": {
       const parts: FormDataPart[] = parseFormDataBody(body)
-        .filter(p => p.enabled !== false && p.key.trim())
-        .map(p => ({ key: p.key.trim(), value: p.value, partType: p.type }))
-      return parts.length > 0 ? { mode: 'formData', parts } : null
+        .filter((p) => p.enabled !== false && p.key.trim())
+        .map((p) => ({ key: p.key.trim(), value: p.value, partType: p.type }));
+      return parts.length > 0 ? { mode: "formData", parts } : null;
     }
 
     default: // 'text' | 'auto' | 其他
-      return { mode: 'raw', content: body }
+      return { mode: "raw", content: body };
   }
 }
 
@@ -148,28 +146,29 @@ export function buildSendBody(bodyType: BodyType, body: string): RequestBody {
 
 export function formatXml(input: string): string {
   const lines = input
-    .replace(/\r\n/g, '\n')
+    .replace(/\r\n/g, "\n")
     .trim()
-    .replace(/>(\s*)(?=<[^!?/])/g, '>\n')
-    .replace(/>\s*$/gm, '>\n')
-    .replace(/^\s*</gm, '<')
-    .split('\n')
-    .map(l => l.trim())
-    .filter(l => l.length > 0)
-  let indent = 0
-  let result = ''
+    .replace(/>(\s*)(?=<[^!?/])/g, ">\n")
+    .replace(/>\s*$/gm, ">\n")
+    .replace(/^\s*</gm, "<")
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
+  let indent = 0;
+  let result = "";
   for (const line of lines) {
     if (line.match(/^<\//) || line.match(/^<\?/)) {
-      indent--
+      indent--;
     }
-    result += '  '.repeat(Math.max(0, indent)) + line + '\n'
+    result += `${"  ".repeat(Math.max(0, indent)) + line}\n`;
     if (
       /^<[^!?/]/.test(line) &&
       !line.match(/\/>\s*$/) &&
       !line.match(/^<\?/) &&
       !line.match(/^<!--/) &&
       !line.match(/^<!\[CDATA\[/)
-    ) indent++
+    )
+      indent++;
   }
-  return result.trim()
+  return result.trim();
 }

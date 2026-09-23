@@ -1,33 +1,41 @@
-import { XIcon } from 'lucide-react'
-import { useLocale } from '@/hooks/useLocale'
-import { cn } from '@/lib/utils'
-import type { ScriptTab, ViewId } from '@/types/view'
+import { XIcon } from "lucide-react";
+import { useLocale } from "@/hooks/useLocale";
+import { cn } from "@/lib/utils";
+import type { ScriptTab, ViewId } from "@/types/view";
 
 const VIEW_TABS: { id: ViewId; labelKey: string; closable?: boolean }[] = [
-  { id: 'proxy', labelKey: 'view.proxy', closable: false },
-  { id: 'new-request', labelKey: 'view.newRequest', closable: true },
-  { id: 'ai', labelKey: 'view.ai', closable: true },
-]
+  { id: "proxy", labelKey: "view.proxy", closable: false },
+  { id: "new-request", labelKey: "view.newRequest", closable: true },
+  { id: "ai", labelKey: "view.ai", closable: true },
+];
 
 interface TabBarProps {
-  activeTabId: string
-  scriptTabs: ScriptTab[]
-  mountedViews: Set<ViewId>
-  onViewChange: (view: ViewId) => void
-  onCloseTab: (view: ViewId) => void
-  onSelectScriptTab: (fileKey: string) => void
-  onCloseScriptTab: (fileKey: string) => void
+  activeTabId: string;
+  scriptTabs: ScriptTab[];
+  mountedViews: Set<ViewId>;
+  onViewChange: (view: ViewId) => void;
+  onCloseTab: (view: ViewId) => void;
+  onSelectScriptTab: (fileKey: string) => void;
+  onCloseScriptTab: (fileKey: string) => void;
 }
 
 function stopTitleBarDrag(event: { stopPropagation: () => void }) {
-  event.stopPropagation()
+  event.stopPropagation();
 }
 
-export function TabBar({ activeTabId, scriptTabs, mountedViews, onViewChange, onCloseTab, onSelectScriptTab, onCloseScriptTab }: TabBarProps) {
-  const { t } = useLocale()
+export function TabBar({
+  activeTabId,
+  scriptTabs,
+  mountedViews,
+  onViewChange,
+  onCloseTab,
+  onSelectScriptTab,
+  onCloseScriptTab,
+}: TabBarProps) {
+  const { t } = useLocale();
 
   // Only proxy mounted → hide the entire tab bar
-  if (mountedViews.size <= 1 && scriptTabs.length === 0) return null
+  if (mountedViews.size <= 1 && scriptTabs.length === 0) return null;
 
   return (
     <div className="flex items-center gap-1" data-tauri-drag-region={false}>
@@ -41,11 +49,12 @@ export function TabBar({ activeTabId, scriptTabs, mountedViews, onViewChange, on
           onPointerDown={stopTitleBarDrag}
           onClick={() => onViewChange(id)}
           className={cn(
-            'inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-ui-sm font-medium transition-colors',
+            "inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-ui-sm font-medium transition-colors",
             activeTabId === id
-              ? 'bg-surface-elevated/50 text-foreground'
-              : 'text-muted-foreground hover:text-foreground'
-          )}>
+              ? "bg-surface-elevated/50 text-foreground"
+              : "text-muted-foreground hover:text-foreground",
+          )}
+        >
           {t(labelKey)}
           {closable && (
             <span
@@ -55,13 +64,14 @@ export function TabBar({ activeTabId, scriptTabs, mountedViews, onViewChange, on
               onMouseDown={stopTitleBarDrag}
               onPointerDown={stopTitleBarDrag}
               onClick={(e) => {
-                e.stopPropagation()
-                onCloseTab(id)
+                e.stopPropagation();
+                onCloseTab(id);
               }}
               className={cn(
-                'inline-flex items-center justify-center rounded p-0.5 transition-colors',
-                'text-muted-foreground/50 hover:text-muted-foreground hover:bg-surface-elevated/30'
-              )}>
+                "inline-flex items-center justify-center rounded p-0.5 transition-colors",
+                "text-muted-foreground/50 hover:text-muted-foreground hover:bg-surface-elevated/30",
+              )}
+            >
               <XIcon className="size-3" />
             </span>
           )}
@@ -81,12 +91,18 @@ export function TabBar({ activeTabId, scriptTabs, mountedViews, onViewChange, on
           onPointerDown={stopTitleBarDrag}
           onClick={() => onSelectScriptTab(tab.fileKey)}
           className={cn(
-            'inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-ui-sm font-medium transition-colors',
+            "inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-ui-sm font-medium transition-colors",
             activeTabId === tab.fileKey
-              ? 'bg-surface-elevated/50 text-foreground'
-              : 'text-muted-foreground hover:text-foreground'
-          )}>
-          <span className={cn(tab.dirty && 'after:ml-0.5 after:inline-block after:h-1.5 after:w-1.5 after:rounded-full after:bg-ai-user-bubble')}>
+              ? "bg-surface-elevated/50 text-foreground"
+              : "text-muted-foreground hover:text-foreground",
+          )}
+        >
+          <span
+            className={cn(
+              tab.dirty &&
+                "after:ml-0.5 after:inline-block after:h-1.5 after:w-1.5 after:rounded-full after:bg-ai-user-bubble",
+            )}
+          >
             {tab.label}
           </span>
           <span
@@ -96,17 +112,18 @@ export function TabBar({ activeTabId, scriptTabs, mountedViews, onViewChange, on
             onMouseDown={stopTitleBarDrag}
             onPointerDown={stopTitleBarDrag}
             onClick={(e) => {
-              e.stopPropagation()
-              onCloseScriptTab(tab.fileKey)
+              e.stopPropagation();
+              onCloseScriptTab(tab.fileKey);
             }}
             className={cn(
-              'inline-flex items-center justify-center rounded p-0.5 transition-colors',
-              'text-muted-foreground/50 hover:text-muted-foreground hover:bg-surface-elevated/30'
-            )}>
+              "inline-flex items-center justify-center rounded p-0.5 transition-colors",
+              "text-muted-foreground/50 hover:text-muted-foreground hover:bg-surface-elevated/30",
+            )}
+          >
             <XIcon className="size-3" />
           </span>
         </button>
       ))}
     </div>
-  )
+  );
 }

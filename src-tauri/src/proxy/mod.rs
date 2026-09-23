@@ -3,7 +3,6 @@ use std::time::Duration;
 
 use rama::Layer;
 use rama::error::{BoxError, ErrorContext};
-use rama::http::BodyLimitLayer;
 use rama::http::layer::trace::TraceLayer;
 use rama::http::layer::upgrade::{LazyHttpProxyConnectReplyService, UpgradeLayer};
 use rama::http::matcher::MethodMatcher;
@@ -83,6 +82,7 @@ impl ProxyServer {
         let app_state = app_handle.state::<AppState>();
         let db = app_state.db();
         let settings = app_state.settings_arc();
+        let scripts_dir = app_state.store().scripts_dir().clone();
         let event_channel = app_state.event_channel_arc();
 
         let max_sessions = settings
@@ -97,6 +97,7 @@ impl ProxyServer {
                 let state = State::with_sessions(
                     mitm_tls_service_data,
                     settings,
+                    scripts_dir,
                     event_channel,
                     db,
                     sessions,
@@ -117,13 +118,7 @@ impl ProxyServer {
                 );
 
                 tcp_service
-                    .serve(
-                        (
-                            AddInputExtensionLayer::new(state),
-                            BodyLimitLayer::symmetric(2 * 1024 * 1024),
-                        )
-                            .into_layer(http_service),
-                    )
+                    .serve(AddInputExtensionLayer::new(state).into_layer(http_service))
                     .await;
             }
         });

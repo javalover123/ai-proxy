@@ -1,5 +1,5 @@
 interface Props {
-  className?: string
+  className?: string;
 }
 
 export function LayoutRightOn({ className }: Props) {
@@ -9,5 +9,5 @@ export function LayoutRightOn({ className }: Props) {
       <line x1="13.5" y1="0" x2="13.5" y2="16" strokeOpacity={0.25} strokeWidth="1" />
       <rect x="14" y="0" width="6" height="16" rx="2" fillOpacity={0.7} strokeOpacity={0} />
     </svg>
-  )
+  );
 }
