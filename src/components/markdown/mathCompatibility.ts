@@ -4,7 +4,7 @@ import type {} from "micromark-extension-math";
 import { factorySpace } from "micromark-factory-space";
 import { markdownLineEnding } from "micromark-util-character";
 import { codes, constants, types } from "micromark-util-symbol";
-import type { Construct, Extension, Previous, State, Tokenizer } from "micromark-util-types";
+import type { Construct, Extension, Previous, State, Token, Tokenizer } from "micromark-util-types";
 
 const previousBackslash: Previous = function (code) {
   if (code !== codes.backslash) return true;
@@ -14,7 +14,63 @@ const previousBackslash: Previous = function (code) {
   return tail[1].type === types.characterEscape;
 };
 
-const tokenizeBackslashMathText: Tokenizer = (_effects, _ok, _nok) => start;
+const tokenizeBackslashMathText: Tokenizer = (effects, ok, nok) => {
+  let sequence: Token;
+
+  return start;
+
+  // `\(` opens inline math: enter the same token vocabulary as `mathText` so
+  // `mathFromMarkdown` compiles it to an `inlineMath` node.
+  function start(code: number | null): State | undefined {
+    if (code !== codes.backslash) return nok(code);
+    effects.enter("mathText");
+    effects.enter("mathTextSequence");
+    effects.consume(code);
+    return sequenceOpen;
+  }
+
+  // A backslash not followed by `(` is not inline math: fall through to the
+  // standard character-escape handling (e.g. `\*`, `\[`).
+  function sequenceOpen(code: number | null): State | undefined {
+    if (code !== codes.leftParenthesis) return nok(code);
+    effects.consume(code);
+    effects.exit("mathTextSequence");
+    return between;
+  }
+
+  function between(code: number | null): State | undefined {
+    if (code === null || markdownLineEnding(code)) return nok(code);
+    if (code === codes.backslash) {
+      sequence = effects.enter("mathTextSequence");
+      effects.consume(code);
+      return sequenceClose;
+    }
+    effects.enter("mathTextData");
+    return data(code);
+  }
+
+  function data(code: number | null): State | undefined {
+    if (code === null || code === codes.backslash || markdownLineEnding(code)) {
+      effects.exit("mathTextData");
+      return between(code);
+    }
+    effects.consume(code);
+    return data;
+  }
+
+  // `\)` closes; any other `\` is a TeX command inside the math, so retype the
+  // sequence token as data and keep consuming into it.
+  function sequenceClose(code: number | null): State | undefined {
+    if (code === codes.rightParenthesis) {
+      effects.consume(code);
+      effects.exit("mathTextSequence");
+      effects.exit("mathText");
+      return ok(code);
+    }
+    sequence.type = "mathTextData";
+    return data(code);
+  }
+};
 
 function createMathFlow(marker: number, openMarker: number, closeMarker: number, multiline: boolean): Construct {
   const tokenize: Tokenizer = function (effects, ok, nok) {

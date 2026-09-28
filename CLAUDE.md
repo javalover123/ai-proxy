@@ -26,7 +26,7 @@ cargo fmt --check --manifest-path src-tauri/Cargo.toml
 cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
 ```
 
-本项目当前没有测试。Rust 版本要求：1.96.0+，edition 2024。包管理使用 bun。
+本项目当前没有测试。Rust 版本要求：1.97.0+，edition 2024。包管理使用 bun。
 
 ## 配置
 
@@ -62,7 +62,7 @@ ai-proxy/
 │   │   ├── detail-panel/         # 请求详情面板（proxy + new-request 共享）
 │   │   ├── settings/             # 设置弹窗
 │   │   ├── about/                # 关于弹窗
-│   │   ├── ssl-config/           # SSL 配置弹窗
+│   │   ├── tls-config/           # TLS 配置弹窗
 │   │   ├── script-config/        # 脚本配置弹窗
 │   │   └── ai-view/              # AI 视图
 │   │

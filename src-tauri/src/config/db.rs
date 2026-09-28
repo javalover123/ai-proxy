@@ -10,6 +10,8 @@ use crate::storage::collection_nodes;
 use crate::storage::collection_nodes::CollectionNodesTable;
 use crate::storage::collection_requests;
 use crate::storage::collection_requests::CollectionRequestsTable;
+use crate::storage::environments;
+use crate::storage::environments::EnvironmentsTable;
 use crate::storage::traffic;
 use crate::storage::traffic::TrafficTable;
 
@@ -169,6 +171,20 @@ pub(crate) enum DbCmd {
         fingerprint: i64,
         reply: mpsc::Sender<Result<Vec<String>, sqlite::Error>>,
     },
+    GetAiUsageSummary {
+        start_ms: i64,
+        end_ms: i64,
+        reply: mpsc::Sender<Result<ai::AiUsageSummary, sqlite::Error>>,
+    },
+
+    // ── Environments ─────────────────────────────────────────────────────
+    LoadEnvStore {
+        reply: mpsc::Sender<Result<environments::EnvStoreSnapshot, sqlite::Error>>,
+    },
+    SaveEnvStore {
+        store: environments::EnvStoreSnapshot,
+        reply: mpsc::Sender<Result<environments::EnvStoreSnapshot, sqlite::Error>>,
+    },
 
     /// Graceful shutdown — writer thread exits after processing pending commands.
     Shutdown,
@@ -229,6 +245,7 @@ fn migrate(conn: &sqlite::Connection) -> Result<(), sqlite::Error> {
     CollectionNodesTable::migrate(conn)?;
     CollectionRequestsTable::migrate(conn)?;
     TrafficTable::migrate(conn)?;
+    EnvironmentsTable::migrate(conn)?;
 
     Ok(())
 }
@@ -533,6 +550,27 @@ fn writer_loop(conn: sqlite::Connection, rx: mpsc::Receiver<DbCmd>, db_path: Str
                         request_id,
                         fingerprint,
                     ))
+                    .ok();
+            }
+
+            DbCmd::GetAiUsageSummary {
+                start_ms,
+                end_ms,
+                reply,
+            } => {
+                reply
+                    .send(ai::do_get_ai_usage_summary(&conn, start_ms, end_ms))
+                    .ok();
+            }
+
+            // ── Environments ─────────────────────────────────────────────
+            DbCmd::LoadEnvStore { reply } => {
+                reply.send(environments::do_load_env_store(&conn)).ok();
+            }
+
+            DbCmd::SaveEnvStore { store, reply } => {
+                reply
+                    .send(environments::do_save_env_store(&conn, &store))
                     .ok();
             }
         }

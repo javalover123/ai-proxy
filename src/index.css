@@ -127,6 +127,8 @@
   --ai-user-bubble-text: oklch(0.99 0 0);
   --ai-provider-openai: oklch(0.55 0.22 150);
   --ai-provider-anthropic: oklch(0.62 0.15 45);
+  /* 开关「开」态品牌蓝（Switch 选中轨道，亮色） */
+  --switch-on: oklch(0.55 0.19 255);
 
   /* 内容字号等比缩放系数：small=0.8462(11/13) normal=1 large=1.1538(15/13)，
      由 useProseFontSize hook 运行时写入，UI 骨架（--text-ui-*）不受影响 */
@@ -190,6 +192,8 @@
   --ai-user-bubble-text: oklch(1 0 0);
   --ai-provider-openai: oklch(0.7 0.22 150);
   --ai-provider-anthropic: oklch(0.72 0.14 45);
+  /* 开关「开」态品牌蓝（暗色提亮，小轨道上仍清晰可辨） */
+  --switch-on: oklch(0.66 0.17 255);
 }
 
 @layer base {
@@ -243,15 +247,6 @@
 }
 
 @layer components {
-  /* 全局 Switch 选中色保持 AI 蓝色，与项目品牌视觉一致 */
-  [data-slot='switch'][data-checked] {
-    background-color: var(--ai-user-bubble);
-    border-color: var(--ai-user-bubble);
-  }
-  .dark [data-slot='switch'][data-checked] {
-    background-color: var(--ai-user-bubble);
-    border-color: var(--ai-user-bubble);
-  }
   /* 全局 badge 颜色变量仍保留在 :root/.dark 中以支持 Badge 内联 style 引用 */
 
   /* number 型输入框隐藏上下箭头：端口这类窄列里箭头会挤占本就不多的可视宽度 */
@@ -260,6 +255,16 @@
     -webkit-appearance: none;
     appearance: none;
     margin: 0;
+  }
+}
+
+/* 全局 Switch 选中态 = 品牌蓝（--switch-on），开/关在明暗两套主题下都清晰可辨。
+   必须放 utilities 层：ui/switch.tsx 的 data-checked:bg-primary 同为 utilities 工具类，
+   components 层优先级更低会被盖掉（此前蓝色覆盖正是因此失效）。 */
+@layer utilities {
+  [data-slot='switch'][data-checked] {
+    background-color: var(--switch-on);
+    border-color: var(--switch-on);
   }
 }
 

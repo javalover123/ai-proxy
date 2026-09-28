@@ -1,6 +1,6 @@
 // src/features/new-request/useRequestTabs.ts
 import { useCallback, useRef, useState } from "react";
-import type { ApiRequestNode, RequestTab, RequestTabSavedData } from "@/types/collection";
+import type { ApiRequestNode, KeyValuePair, RequestTab, RequestTabSavedData } from "@/types/collection";
 
 /** Extract saved data snapshot from a tab (or node) */
 function snapshot(tab: RequestTab): RequestTabSavedData {
@@ -17,15 +17,16 @@ function snapshot(tab: RequestTab): RequestTabSavedData {
   };
 }
 
-/** Deep-compare two KeyValuePair arrays */
-function kvEqual(
-  a: { key: string; value: string; enabled?: boolean }[],
-  b: { key: string; value: string; enabled?: boolean }[],
-): boolean {
+/** Deep-compare two KeyValuePair arrays（含 type/description，未设置时按默认值归一） */
+function kvEqual(a: KeyValuePair[], b: KeyValuePair[]): boolean {
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) {
-    if (a[i].key !== b[i].key || a[i].value !== b[i].value || (a[i].enabled !== false) !== (b[i].enabled !== false))
-      return false;
+    const x = a[i];
+    const y = b[i];
+    if (x.key !== y.key || x.value !== y.value) return false;
+    if ((x.enabled !== false) !== (y.enabled !== false)) return false;
+    if ((x.type ?? "string") !== (y.type ?? "string")) return false;
+    if ((x.description ?? "") !== (y.description ?? "")) return false;
   }
   return true;
 }

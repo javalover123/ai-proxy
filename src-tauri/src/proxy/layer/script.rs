@@ -88,7 +88,7 @@ where
         // ── request hooks ──
         let modified_req = match apply_request_scripts(&state, &scripts, parts, body).await {
             Ok(req) => req,
-            Err(blocked_response) => return Ok(blocked_response),
+            Err(blocked_response) => return Ok(*blocked_response),
         };
 
         // ── forward to inner handler ──
@@ -110,7 +110,7 @@ async fn apply_request_scripts(
     scripts: &[String],
     parts: rama::http::request::Parts,
     body: Body,
-) -> Result<Request, Response> {
+) -> Result<Request, Box<Response>> {
     let body_str = match script::collect_body_str(body).await {
         Ok(s) => s,
         // Body exceeds capture limit → skip scripts, forward as-is.
@@ -140,7 +140,10 @@ async fn apply_request_scripts(
                 })
                 .ok();
             }
-            Err(error_response(StatusCode::FORBIDDEN, "Blocked by script"))
+            Err(Box::new(error_response(
+                StatusCode::FORBIDDEN,
+                "Blocked by script",
+            )))
         }
     }
 }

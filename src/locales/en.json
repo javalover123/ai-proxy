@@ -39,12 +39,13 @@
     "status": "Status",
     "duration": "Duration",
     "time": "Time",
-    "ssl": "SSL",
+    "tls": "TLS",
     "edit": "Edit",
     "repeat": "Repeat",
     "copyCurl": "Copy cURL",
     "emptyTitle": "No traffic captured yet.",
-    "pending": "..."
+    "pending": "...",
+    "denied": "Denied"
   },
   "detail": {
     "pending": "Pending",
@@ -83,10 +84,10 @@
     "console": "Console",
     "noConsole": "No console output",
     "decryptPrompt": "Response was not decrypted — content cannot be viewed.",
-    "decryptAction": "Enable SSL",
-    "decryptSuccess": "SSL decryption enabled for {domain} – new requests will be decrypted.",
+    "decryptAction": "Enable TLS",
+    "decryptSuccess": "TLS enabled for {domain} – new requests will be decrypted.",
     "copyForAi": "Copy for AI",
-    "decryptSuccess": "SSL decryption enabled for {domain} – new requests will be decrypted."
+    "decryptSuccess": "TLS enabled for {domain} – new requests will be decrypted."
   },
   "settings": {
     "title": "Settings",
@@ -126,9 +127,10 @@
     "settings": "Settings",
     "about": "About",
     "tools": "Tools",
-    "sslConfig": "SSL Decryption Config",
+    "tlsConfig": "TLS Config",
     "scriptConfig": "Script Config",
     "aiConfig": "AI Detection",
+    "authzConfig": "Authorization Config",
     "quit": "Quit"
   },
   "sendRequest": {
@@ -159,10 +161,12 @@
     "detailBottom": "Detail below",
     "detailRight": "Detail right"
   },
-  "sslConfig": {
-    "title": "SSL Decryption Config",
-    "description": "Configure SSL decryption global switch and domain whitelist.",
-    "globalToggle": "Enable SSL Decryption",
+  "tlsConfig": {
+    "title": "TLS Config",
+    "description": "Configure the TLS global switch and domain whitelist.",
+    "globalToggle": "Enable TLS",
+    "recordDecryptedOnly": "Record decrypted traffic only",
+    "recordDecryptedOnlyHint": "Requests that bypass decryption (tunneled) won't appear in the traffic log.",
     "whitelistHeader": "Domain Whitelist",
     "domainCount": "· {{n}}",
     "colEnabled": "On",
@@ -175,7 +179,7 @@
     "saving": "Saving...",
     "duplicateDomain": "Domain already exists",
     "emptyWhitelist": "No domains yet. Add a domain to see it here.",
-    "toolbarToggle": "SSL Decrypt",
+    "toolbarToggle": "TLS",
     "installCert": "Install CA Certificate",
     "installCertHint": "Import the proxy's root CA into the system trust store so browsers and tools trust decrypted HTTPS traffic. The system will prompt for administrator permission.",
     "installCertSuccess": "CA certificate installed successfully.",
@@ -202,6 +206,31 @@
     "nameRequired": "Script name is required",
     "emptyList": "No scripts yet. Add a script to see it here.",
     "toolbarToggle": "Scripts"
+  },
+  "authzConfig": {
+    "title": "Authorization Config",
+    "description": "Delegate allow/deny decisions to an external authorization service (ext_authz). Matching requests are checked before scripts run.",
+    "globalToggle": "Enable Authorization",
+    "ruleListHeader": "Rules",
+    "ruleCount": "· {{n}}",
+    "addRule": "Add Rule",
+    "placeholderName": "Rule name",
+    "domain": "Domain",
+    "placeholderDomain": "Domain rule (e.g. *.example.com)",
+    "method": "Method",
+    "url": "Check URL",
+    "placeholderUrl": "http://127.0.0.1:9001/check",
+    "timeout": "Timeout (ms)",
+    "onError": "On Error",
+    "onErrorClosed": "Deny (closed)",
+    "onErrorOpen": "Allow (open)",
+    "delete": "Delete",
+    "cancel": "Cancel",
+    "save": "Save",
+    "saving": "Saving...",
+    "nameRequired": "Rule name is required when enabled",
+    "urlRequired": "Check URL is required when enabled",
+    "emptyList": "No rules yet. Add a rule to authorize matching traffic."
   },
   "matchTest": {
     "placeholder": "Type a URL to test matching…",
@@ -251,6 +280,7 @@
   },
   "aiSidebar": {
     "title": "AI Chat",
+    "stats": "Stats",
     "empty": "No conversations yet",
     "deleteSession": "Delete session",
     "deleteRequest": "Delete request",
@@ -292,8 +322,26 @@
     "openLink": "Open link",
     "openLinkFailed": "Failed to open link"
   },
+  "aiUsage": {
+    "title": "Usage Stats",
+    "periodToday": "Today",
+    "periodMonth": "This month",
+    "periodYear": "This year",
+    "requests": "Requests",
+    "inputTokens": "Input tokens",
+    "outputTokens": "Output tokens",
+    "totalTokens": "Total tokens",
+    "customHint": "Select a date range",
+    "startTime": "Start",
+    "endTime": "End",
+    "invalidRange": "Start cannot be later than end",
+    "today": "Today",
+    "prevMonth": "Previous month",
+    "nextMonth": "Next month"
+  },
   "common": {
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "confirm": "OK"
   },
   "requestEditor": {
     "params": "Params",
@@ -321,7 +369,17 @@
     "bodyFormDataAddField": "Add field",
     "bodyFormDataTypeText": "Text",
     "bodyFormDataTypeFile": "File",
-    "bodyUrlEncodedAddField": "Add field"
+    "bodyUrlEncodedAddField": "Add field",
+    "paramName": "Name",
+    "paramValue": "Value",
+    "paramDescription": "Description",
+    "paramType": "Type",
+    "validation": {
+      "integer": "must be an integer",
+      "bool": "must be true / false / 1 / 0",
+      "array": "must be a JSON array",
+      "object": "must be a JSON object"
+    }
   },
   "tab": {
     "untitled": "Untitled Request",
@@ -336,12 +394,20 @@
     "unsavedDesc": "You have unsaved changes in this request. Save before closing?",
     "saveClose": "Save & Close",
     "discardClose": "Don't Save",
-    "envProduction": "Production",
-    "envTest": "Test",
     "envManagement": "Environment Management",
+    "envGlobal": "Global Variables",
+    "envCurrent": "Current",
     "envName": "Name",
-    "envUrlPrefix": "URL Prefix",
-    "envAdd": "Add Environment",
-    "envDelete": "Delete"
+    "envDelete": "Delete",
+    "envRename": "Rename",
+    "envNewEnv": "New Environment",
+    "envNewEnvName": "New Environment",
+    "envVarName": "Variable Name",
+    "envVarValue": "Variable Value",
+    "envAddVariable": "Add Variable",
+    "envEmptyVariables": "No variables yet",
+    "envSave": "Save",
+    "envCancel": "Cancel",
+    "envSaving": "Saving..."
   }
 }

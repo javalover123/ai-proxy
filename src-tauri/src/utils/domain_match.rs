@@ -15,7 +15,7 @@ pub fn domain_match(pattern: &str, host: &str) -> bool {
 }
 
 /// 从用户输入的 URL 提取匹配候选串，供规则命中测试使用：
-/// - match_path=false → 仅 host（SSL 白名单 / 脚本运行时语义）
+/// - match_path=false → 仅 host（TLS 白名单 / 脚本运行时语义）
 /// - match_path=true  → host + path（与 compute_ai_hint 的候选串构造一致）
 ///
 /// 输入容忍缺 scheme（自动补 https://）；解析失败返回 None。

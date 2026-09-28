@@ -254,7 +254,7 @@ fn url_decode(input: &str) -> String {
 }
 
 /// 解析 URI 查询参数为解码后的 Map。
-fn parse_query_params(uri: &Uri) -> HashMap<String, String> {
+pub(crate) fn parse_query_params(uri: &Uri) -> HashMap<String, String> {
     uri.query()
         .map(|q| {
             q.as_encoded_str()

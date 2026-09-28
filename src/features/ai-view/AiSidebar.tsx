@@ -1,4 +1,5 @@
 import {
+  BarChart3Icon,
   ChevronDown,
   ChevronRight,
   CodeIcon,
@@ -10,37 +11,18 @@ import {
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import i18n from "@/i18n";
-import { formatDuration, formatTokenCount, formatTokenExact } from "@/lib/format";
+import { formatDuration, formatTokenCount } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { AiSessionState, AiUsage } from "@/types/ai";
 
-/** Token 展示组件：缩略值 + hover 显示精确千分位数字（仅缩略时显示 tooltip） */
-function TokenValue({ value, className }: { value: number | null | undefined; className?: string }) {
-  const locale = i18n.language?.startsWith("zh") ? "zh" : "en";
-  const display = formatTokenCount(value, locale);
-  const exact = formatTokenExact(value);
-  const isAbbreviated = display.startsWith("≈");
-
-  if (!isAbbreviated) return <span className={className}>{display}</span>;
-
-  return (
-    <Tooltip>
-      <TooltipTrigger render={<span className={cn("cursor-default", className)}>{display}</span>} />
-      <TooltipContent
-        side="top"
-        className="bg-popover text-popover-foreground border border-border text-ui-sm px-2 py-1"
-      >
-        <span className="font-mono tabular-nums">{exact}</span>
-        <span className="text-muted-foreground ml-1">tokens</span>
-      </TooltipContent>
-    </Tooltip>
-  );
-}
+import { TokenValue } from "./TokenValue";
+import { UsageStatsDialog } from "./UsageStatsDialog";
 
 /** 选中项：仅 sessionId = 选中会话头（合并时间线）；带 requestId = 选中单次请求 */
 export interface AiSelection {
@@ -166,33 +148,31 @@ function SessionGroup({
                   <ChevronRight className="size-3 flex-shrink-0" />
                 )}
               </span>
-              {session.source && (
-                <Tooltip>
-                  <TooltipTrigger
-                    render={
-                      <span className="max-w-24 truncate text-ui-2xs px-1.5 py-0.5 rounded border bg-sky-500/10 text-sky-500 border-sky-500/20 dark:text-sky-400 cursor-default">
-                        {session.source}
-                      </span>
-                    }
-                  />
-                  <TooltipContent side="right" className={TIP_CLASS}>
-                    <div className={TIP_GRID}>
-                      <span className="text-muted-foreground">Session</span>
-                      <span className="text-right break-all">{session.scopeHost || "—"}</span>
-                      <span className="text-muted-foreground">{t("aiSidebar.model", "模型")}</span>
-                      <span className="text-right break-all">{model ?? "—"}</span>
-                      <span className="text-muted-foreground">{t("aiSidebar.groupBy", "分组依据")}</span>
-                      <span className="text-right break-all">{session.matchReason || "—"}</span>
-                      <span className="text-muted-foreground">{t("aiSidebar.turns", "轮次")}</span>
-                      <span className="text-right">
-                        {t("aiSidebar.turnsValue", "{{count}} 次请求", { count: session.requestIds.length })}
-                      </span>
-                      <div className="col-span-2 border-t border-border/60 my-0.5" />
-                      <UsageRows usage={session.usageTotal} />
-                    </div>
-                  </TooltipContent>
-                </Tooltip>
-              )}
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <span className="max-w-24 truncate text-ui-2xs px-1.5 py-0.5 rounded border bg-sky-500/10 text-sky-500 border-sky-500/20 dark:text-sky-400 cursor-default">
+                      {session.source || "api"}
+                    </span>
+                  }
+                />
+                <TooltipContent side="right" className={TIP_CLASS}>
+                  <div className={TIP_GRID}>
+                    <span className="text-muted-foreground">Session</span>
+                    <span className="text-right break-all">{session.scopeHost || "—"}</span>
+                    <span className="text-muted-foreground">{t("aiSidebar.model", "模型")}</span>
+                    <span className="text-right break-all">{model ?? "—"}</span>
+                    <span className="text-muted-foreground">{t("aiSidebar.groupBy", "分组依据")}</span>
+                    <span className="text-right break-all">{session.matchReason || "—"}</span>
+                    <span className="text-muted-foreground">{t("aiSidebar.turns", "轮次")}</span>
+                    <span className="text-right">
+                      {t("aiSidebar.turnsValue", "{{count}} 次请求", { count: session.requestIds.length })}
+                    </span>
+                    <div className="col-span-2 border-t border-border/60 my-0.5" />
+                    <UsageRows usage={session.usageTotal} />
+                  </div>
+                </TooltipContent>
+              </Tooltip>
               <span className="text-ui-xs text-muted-foreground/60">{session.requestIds.length} 轮</span>
               <span
                 onClick={(e) => {
@@ -341,6 +321,7 @@ export function AiSidebar({
   onToggleMd,
 }: AiSidebarProps) {
   const { t } = useTranslation();
+  const [statsOpen, setStatsOpen] = useState(false);
   const grandTotal = sessions.reduce((sum, s) => sum + (s.usageTotal.totalTokens ?? 0), 0);
 
   return (
@@ -382,6 +363,21 @@ export function AiSidebar({
           </div>
         )}
       </ScrollArea>
+
+      <Separator />
+      <div className="p-2">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full justify-start text-muted-foreground hover:text-foreground"
+          onClick={() => setStatsOpen(true)}
+        >
+          <BarChart3Icon className="size-3.5" />
+          <span>{t("aiSidebar.stats", "统计")}</span>
+        </Button>
+      </div>
+
+      <UsageStatsDialog open={statsOpen} onOpenChange={setStatsOpen} />
     </div>
   );
 }

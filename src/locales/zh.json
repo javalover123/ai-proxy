@@ -39,12 +39,13 @@
     "status": "状态",
     "duration": "耗时",
     "time": "时间",
-    "ssl": "SSL",
+    "tls": "TLS",
     "edit": "编辑",
     "repeat": "重复请求",
     "copyCurl": "复制 cURL",
     "emptyTitle": "暂无流量记录。",
-    "pending": "..."
+    "pending": "...",
+    "denied": "已拒绝"
   },
   "detail": {
     "pending": "等待中",
@@ -83,10 +84,10 @@
     "console": "控制台",
     "noConsole": "控制台无输出",
     "decryptPrompt": "此请求未解密，无法查看响应内容。",
-    "decryptAction": "启用 SSL 解密",
-    "decryptSuccess": "已为 {domain} 启用 SSL 解密，新请求将可解密查看。",
+    "decryptAction": "启用 TLS",
+    "decryptSuccess": "已为 {domain} 启用 TLS，新请求将可解密查看。",
     "copyForAi": "复制给 AI",
-    "decryptSuccess": "已为 {domain} 启用 SSL 解密，新请求将自动解密。"
+    "decryptSuccess": "已为 {domain} 启用 TLS，新请求将自动解密。"
   },
   "settings": {
     "title": "设置",
@@ -126,9 +127,10 @@
     "settings": "设置",
     "about": "关于",
     "tools": "工具",
-    "sslConfig": "SSL 解密配置",
+    "tlsConfig": "TLS 配置",
     "scriptConfig": "脚本配置",
     "aiConfig": "AI 检测配置",
+    "authzConfig": "授权配置",
     "quit": "退出"
   },
   "sendRequest": {
@@ -159,10 +161,12 @@
     "detailBottom": "下方详情",
     "detailRight": "右侧详情"
   },
-  "sslConfig": {
-    "title": "SSL 解密配置",
-    "description": "配置 SSL 解密的全局开关与域名白名单。",
-    "globalToggle": "启用 SSL 解密",
+  "tlsConfig": {
+    "title": "TLS 配置",
+    "description": "配置 TLS 的全局开关与域名白名单。",
+    "globalToggle": "启用 TLS",
+    "recordDecryptedOnly": "仅记录已解密流量",
+    "recordDecryptedOnlyHint": "未命中白名单、走隧道透传的请求不会出现在流量列表。",
     "whitelistHeader": "域名白名单",
     "domainCount": "· {{n}} 个",
     "colEnabled": "启用",
@@ -175,7 +179,7 @@
     "saving": "保存中...",
     "duplicateDomain": "域名已存在",
     "emptyWhitelist": "暂无域名，添加后将出现在这里。",
-    "toolbarToggle": "SSL 解密",
+    "toolbarToggle": "TLS",
     "installCert": "安装 CA 证书",
     "installCertHint": "将代理的根证书导入系统受信任证书库，使浏览器和工具信任解密后的 HTTPS 流量。系统将提示授予管理员权限。",
     "installCertSuccess": "CA 证书安装成功。",
@@ -202,6 +206,31 @@
     "nameRequired": "脚本名称不能为空",
     "emptyList": "暂无脚本，添加后将出现在这里。",
     "toolbarToggle": "脚本"
+  },
+  "authzConfig": {
+    "title": "授权配置",
+    "description": "把放行/拒绝决策交给外部授权服务（ext_authz）。命中的请求会在脚本执行前先做授权检查。",
+    "globalToggle": "启用授权",
+    "ruleListHeader": "规则列表",
+    "ruleCount": "· {{n}} 条",
+    "addRule": "添加规则",
+    "placeholderName": "规则名称",
+    "domain": "域名",
+    "placeholderDomain": "域名规则（如 *.example.com）",
+    "method": "方法",
+    "url": "检查地址",
+    "placeholderUrl": "http://127.0.0.1:9001/check",
+    "timeout": "超时（毫秒）",
+    "onError": "服务不可用时",
+    "onErrorClosed": "拒绝（closed）",
+    "onErrorOpen": "放行（open）",
+    "delete": "删除",
+    "cancel": "取消",
+    "save": "保存",
+    "saving": "保存中...",
+    "nameRequired": "启用规则必须填写名称",
+    "urlRequired": "启用规则必须填写检查地址",
+    "emptyList": "暂无规则，添加后将出现在这里。"
   },
   "matchTest": {
     "placeholder": "输入 URL 测试命中…",
@@ -251,6 +280,7 @@
   },
   "aiSidebar": {
     "title": "AI 对话",
+    "stats": "统计",
     "empty": "暂无对话记录",
     "deleteSession": "删除会话",
     "deleteRequest": "删除该请求",
@@ -292,8 +322,26 @@
     "openLink": "打开链接",
     "openLinkFailed": "无法打开链接"
   },
+  "aiUsage": {
+    "title": "用量统计",
+    "periodToday": "今日",
+    "periodMonth": "本月",
+    "periodYear": "本年",
+    "requests": "请求数",
+    "inputTokens": "输入 Token",
+    "outputTokens": "输出 Token",
+    "totalTokens": "总 Token",
+    "customHint": "请选择起止日期",
+    "startTime": "开始时间",
+    "endTime": "结束时间",
+    "invalidRange": "开始时间不能晚于结束时间",
+    "today": "今天",
+    "prevMonth": "上个月",
+    "nextMonth": "下个月"
+  },
   "common": {
-    "cancel": "取消"
+    "cancel": "取消",
+    "confirm": "确定"
   },
   "requestEditor": {
     "params": "Params",
@@ -321,7 +369,17 @@
     "bodyFormDataAddField": "添加字段",
     "bodyFormDataTypeText": "文本",
     "bodyFormDataTypeFile": "文件",
-    "bodyUrlEncodedAddField": "添加字段"
+    "bodyUrlEncodedAddField": "添加字段",
+    "paramName": "参数名",
+    "paramValue": "参数值",
+    "paramDescription": "说明",
+    "paramType": "类型",
+    "validation": {
+      "integer": "必须是整数",
+      "bool": "必须是 true / false / 1 / 0",
+      "array": "必须是 JSON 数组",
+      "object": "必须是 JSON 对象"
+    }
   },
   "tab": {
     "untitled": "未命名请求",
@@ -336,12 +394,20 @@
     "unsavedDesc": "此请求中有未保存的更改。是否要保存后再关闭？",
     "saveClose": "保存并关闭",
     "discardClose": "不保存",
-    "envProduction": "正式环境",
-    "envTest": "测试环境",
     "envManagement": "环境管理",
+    "envGlobal": "全局变量",
+    "envCurrent": "当前",
     "envName": "名称",
-    "envUrlPrefix": "URL 前缀",
-    "envAdd": "添加环境",
-    "envDelete": "删除"
+    "envDelete": "删除",
+    "envRename": "重命名",
+    "envNewEnv": "新建环境",
+    "envNewEnvName": "新环境",
+    "envVarName": "变量名",
+    "envVarValue": "变量值",
+    "envAddVariable": "添加变量",
+    "envEmptyVariables": "暂无变量",
+    "envSave": "保存",
+    "envCancel": "取消",
+    "envSaving": "保存中..."
   }
 }

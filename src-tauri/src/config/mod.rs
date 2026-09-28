@@ -3,7 +3,7 @@ mod settings;
 mod store;
 
 pub use settings::{
-    AiConfig, AiProvider, AiRuleSource, LogConfig, ProxyConfig, ScriptConfig, Settings, SslConfig,
-    sync_ssl_for_ai,
+    AiConfig, AiProvider, AiRuleSource, AuthzConfig, AuthzOnError, AuthzRule, LogConfig,
+    ProxyConfig, ScriptConfig, Settings, TlsConfig, sync_tls_for_ai,
 };
 pub use store::Store;

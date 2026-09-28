@@ -1,17 +1,13 @@
 // src/lib/body-utils.ts — body 解析/序列化工具
 // urlencoded 和 multipart body 在存储层都是字符串，KV 编辑器在显示时解析、变更时序列化
 
-import type { BodyType, FormDataPart, KeyValuePair, RequestBody } from "@/types/collection";
+import type { BodyType, FormDataPart, KeyValuePair, KeyValueType, RequestBody } from "@/types/collection";
 
-// ---------------------------------------------------------------------------
-// FormDataEntry
-// ---------------------------------------------------------------------------
+const KEY_VALUE_TYPES: readonly KeyValueType[] = ["string", "integer", "bool", "array", "object", "file"];
 
-export interface FormDataEntry {
-  key: string;
-  value: string;
-  enabled: boolean;
-  type: "text" | "file";
+/** 把持久化里的 type 归一化为合法 KeyValueType；旧数据 "text" 等一律落回 "string" */
+function normalizeKeyValueType(raw: unknown): KeyValueType {
+  return KEY_VALUE_TYPES.includes(raw as KeyValueType) ? (raw as KeyValueType) : "string";
 }
 
 // ---------------------------------------------------------------------------
@@ -68,10 +64,10 @@ export function serializeUrlEncoded(entries: KeyValuePair[]): string {
 // ---------------------------------------------------------------------------
 
 /**
- * 将 JSON 数组字符串解析为 FormDataEntry[]
- * "[{key,value,type,enabled}]" → FormDataEntry[]
+ * 将 JSON 数组字符串解析为 KeyValuePair[]
+ * "[{key,value,type,enabled}]" → KeyValuePair[]
  */
-export function parseFormDataBody(body: string): FormDataEntry[] {
+export function parseFormDataBody(body: string): KeyValuePair[] {
   if (!body.trim()) return [];
   try {
     const parsed = JSON.parse(body);
@@ -82,7 +78,8 @@ export function parseFormDataBody(body: string): FormDataEntry[] {
         key: String(e.key ?? ""),
         value: String(e.value ?? ""),
         enabled: e.enabled !== false,
-        type: (e.type === "file" ? "file" : "text") as "text" | "file",
+        type: normalizeKeyValueType(e.type),
+        description: typeof e.description === "string" ? e.description : undefined,
       }));
   } catch {
     return [];
@@ -90,9 +87,9 @@ export function parseFormDataBody(body: string): FormDataEntry[] {
 }
 
 /**
- * 将 FormDataEntry[] 序列化为 JSON 数组字符串
+ * 将 KeyValuePair[] 序列化为 JSON 数组字符串
  */
-export function serializeFormDataBody(entries: FormDataEntry[]): string {
+export function serializeFormDataBody(entries: KeyValuePair[]): string {
   return JSON.stringify(entries);
 }
 
@@ -131,7 +128,7 @@ export function buildSendBody(bodyType: BodyType, body: string): RequestBody {
     case "multipart": {
       const parts: FormDataPart[] = parseFormDataBody(body)
         .filter((p) => p.enabled !== false && p.key.trim())
-        .map((p) => ({ key: p.key.trim(), value: p.value, partType: p.type }));
+        .map((p) => ({ key: p.key.trim(), value: p.value, partType: p.type === "file" ? "file" : "text" }));
       return parts.length > 0 ? { mode: "formData", parts } : null;
     }
 

@@ -1,5 +1,5 @@
 use crate::AppState;
-use crate::config::{AiConfig, ProxyConfig, ScriptConfig, Settings, SslConfig};
+use crate::config::{AiConfig, AuthzConfig, ProxyConfig, ScriptConfig, Settings, TlsConfig};
 use crate::utils::domain_match::{domain_match, url_candidate};
 use std::hash::{DefaultHasher, Hash, Hasher};
 
@@ -72,16 +72,16 @@ pub fn save_script_config(
 }
 
 #[tauri::command]
-pub fn get_ssl_config(state: tauri::State<'_, AppState>) -> Result<SslConfig, String> {
+pub fn get_tls_config(state: tauri::State<'_, AppState>) -> Result<TlsConfig, String> {
     let settings = state.settings();
-    Ok(settings.ssl)
+    Ok(settings.tls)
 }
 
 #[tauri::command]
-pub fn save_ssl_config(state: tauri::State<'_, AppState>, ssl: SslConfig) -> Result<(), String> {
+pub fn save_tls_config(state: tauri::State<'_, AppState>, tls: TlsConfig) -> Result<(), String> {
     let data_dir = state.store().data_dir();
     let mut settings = Settings::load_from_path(data_dir).map_err(|e| e.to_string())?;
-    settings.ssl = ssl;
+    settings.tls = tls;
     settings.save_to_path(data_dir).map_err(|e| e.to_string())?;
 
     state.set_settings(settings);
@@ -89,12 +89,12 @@ pub fn save_ssl_config(state: tauri::State<'_, AppState>, ssl: SslConfig) -> Res
     Ok(())
 }
 
-/// 仅切换 SSL 解密总开关；白名单等其余配置原样保留（供底部栏快捷开关使用）。
+/// 仅切换 TLS 解密总开关；白名单等其余配置原样保留（供底部栏快捷开关使用）。
 #[tauri::command]
-pub fn set_ssl_enabled(state: tauri::State<'_, AppState>, enabled: bool) -> Result<(), String> {
+pub fn set_tls_enabled(state: tauri::State<'_, AppState>, enabled: bool) -> Result<(), String> {
     let data_dir = state.store().data_dir();
     let mut settings = Settings::load_from_path(data_dir).map_err(|e| e.to_string())?;
-    settings.ssl.enabled = enabled;
+    settings.tls.enabled = enabled;
     settings.save_to_path(data_dir).map_err(|e| e.to_string())?;
 
     state.set_settings(settings);
@@ -108,6 +108,49 @@ pub fn set_script_enabled(state: tauri::State<'_, AppState>, enabled: bool) -> R
     let data_dir = state.store().data_dir();
     let mut settings = Settings::load_from_path(data_dir).map_err(|e| e.to_string())?;
     settings.script.enabled = enabled;
+    settings.save_to_path(data_dir).map_err(|e| e.to_string())?;
+
+    state.set_settings(settings);
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_authz_config(state: tauri::State<'_, AppState>) -> Result<AuthzConfig, String> {
+    let settings = state.settings();
+    Ok(settings.authz)
+}
+
+#[tauri::command]
+pub fn save_authz_config(
+    state: tauri::State<'_, AppState>,
+    authz: AuthzConfig,
+) -> Result<(), String> {
+    let data_dir = state.store().data_dir();
+    let mut settings = Settings::load_from_path(data_dir).map_err(|e| e.to_string())?;
+
+    // 校验：启用规则必须有 name 与合法 url；method 归一化（trim + 大写，ANY 与空串同义）。
+    let mut authz = authz;
+    for item in &mut authz.rules {
+        item.name = item.name.trim().to_string();
+        item.domain = item.domain.trim().to_string();
+        item.url = item.url.trim().to_string();
+        item.method = item.method.trim().to_uppercase();
+        if item.method == "ANY" {
+            item.method.clear();
+        }
+        if item.enabled && item.name.is_empty() {
+            return Err("Authz rule name is required when enabled".into());
+        }
+        if item.enabled && item.url.is_empty() {
+            return Err(format!(
+                "Authz rule url is required when enabled: '{}'",
+                item.name
+            ));
+        }
+    }
+
+    settings.authz = authz;
     settings.save_to_path(data_dir).map_err(|e| e.to_string())?;
 
     state.set_settings(settings);
@@ -158,7 +201,7 @@ pub fn save_script_content(
 }
 
 /// 测试 url 对一组 pattern 的命中情况（配置弹窗「匹配测试」行使用）。
-/// 与运行时同走 domain_match：match_path=false 仅取 host（SSL/脚本语义），
+/// 与运行时同走 domain_match：match_path=false 仅取 host（TLS/脚本语义），
 /// true 取 host+path（AI 检测语义）。url 无法解析时全部返回 false。
 #[tauri::command]
 pub fn test_rule_match(patterns: Vec<String>, url: String, match_path: bool) -> Vec<bool> {
@@ -188,8 +231,8 @@ pub fn save_ai_config(state: tauri::State<'_, AppState>, ai: AiConfig) -> Result
         .url_patterns
         .retain(|r| !r.url.trim().is_empty());
 
-    // AI 检测依赖 MITM 解密：启用时联动打开 SSL 总开关并补齐白名单域名
-    crate::config::sync_ssl_for_ai(&mut settings.ssl, &ai);
+    // AI 检测依赖 MITM 解密：启用时联动打开 TLS 总开关并补齐白名单域名
+    crate::config::sync_tls_for_ai(&mut settings.tls, &ai);
 
     settings.ai = ai;
     settings.save_to_path(data_dir).map_err(|e| e.to_string())?;
@@ -277,11 +320,11 @@ pub fn install_ca_cert(state: tauri::State<'_, AppState>) -> Result<String, Stri
         let check = std::process::Command::new("security")
             .args(["find-certificate", "-c", "ai-proxy"])
             .output();
-        if let Ok(ref out) = check {
-            if out.status.success() {
-                log::info!("CA cert already in login keychain, skipping");
-                return Ok("Certificate is already installed in login keychain".into());
-            }
+        if let Ok(ref out) = check
+            && out.status.success()
+        {
+            log::info!("CA cert already in login keychain, skipping");
+            return Ok("Certificate is already installed in login keychain".into());
         }
 
         let output = std::process::Command::new("security")
@@ -433,7 +476,7 @@ mod tests {
             String::new(),
         ];
         let url = "https://api.openai.com/v1/chat/completions".to_string();
-        // host 语义（SSL/脚本）：带路径的 pattern 永不命中；空 pattern 匹配一切（脚本「不限域名」）
+        // host 语义（TLS/脚本）：带路径的 pattern 永不命中；空 pattern 匹配一切（脚本「不限域名」）
         assert_eq!(
             test_rule_match(patterns.clone(), url.clone(), false),
             vec![true, false, true]

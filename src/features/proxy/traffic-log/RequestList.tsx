@@ -5,6 +5,7 @@ import {
   LockKeyholeOpenIcon,
   PencilIcon,
   RefreshCwIcon,
+  ShieldOffIcon,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -28,8 +29,8 @@ const METHOD_COLOR_VAR = (method: string) => {
 export type ListEntry = TrafficEntry;
 export type SortOrder = "desc" | "asc";
 export type SortColumn = ColKey | null;
-type ColKey = "id" | "url" | "method" | "status" | "duration" | "time" | "ssl";
-const COLS: ColKey[] = ["id", "url", "method", "status", "duration", "time", "ssl"];
+type ColKey = "id" | "url" | "method" | "status" | "duration" | "time" | "tls";
+const COLS: ColKey[] = ["id", "url", "method", "status", "duration", "time", "tls"];
 const DEFAULT_WIDTHS: Record<ColKey, number> = {
   id: 9,
   url: 32,
@@ -37,7 +38,7 @@ const DEFAULT_WIDTHS: Record<ColKey, number> = {
   status: 9,
   duration: 9,
   time: 15,
-  ssl: 8,
+  tls: 8,
 };
 const MIN_PCT = 5;
 const MAX_PCT = 40;
@@ -227,7 +228,7 @@ export default function RequestList({
         {renderHeaderCell("status", "requestList.status")}
         {renderHeaderCell("duration", "requestList.duration")}
         {renderHeaderCell("time", "requestList.time")}
-        {renderHeaderCell("ssl", "requestList.ssl")}
+        {renderHeaderCell("tls", "requestList.tls")}
       </div>
 
       {entries.length === 0 ? (
@@ -281,7 +282,7 @@ export default function RequestList({
                       {entry.method}
                     </Badge>
                   </div>
-                  <div className="px-2 py-2 min-w-0 overflow-hidden whitespace-nowrap">
+                  <div className="px-2 py-2 min-w-0 overflow-hidden whitespace-nowrap flex items-center gap-1.5">
                     <Badge
                       className="rounded font-semibold"
                       style={{ color: `var(--badge-${statusCategory(entry.status)})` }}
@@ -291,6 +292,19 @@ export default function RequestList({
                       )}
                       {entry.status ?? t("requestList.pending")}
                     </Badge>
+                    {entry.denied && (
+                      <Tooltip>
+                        <TooltipTrigger className="inline-flex shrink-0 text-muted-foreground/70">
+                          <ShieldOffIcon className="size-3.5" />
+                        </TooltipTrigger>
+                        <TooltipContent
+                          side="top"
+                          className="max-w-[300px] bg-popover text-popover-foreground text-ui-sm"
+                        >
+                          {entry.deniedReason ?? t("requestList.denied")}
+                        </TooltipContent>
+                      </Tooltip>
+                    )}
                   </div>
                   <div className="px-2 py-2 min-w-0 overflow-hidden whitespace-nowrap text-muted-foreground">
                     {formatDuration(entry.durationMs)}

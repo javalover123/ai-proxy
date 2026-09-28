@@ -91,6 +91,7 @@ export default function RequestEditor(props: RequestEditorProps) {
             onChange={props.onParamsChange}
             addLabel={t("requestEditor.addParam")}
             emptyLabel=""
+            excludedTypes={["file"]}
           />
         </ScrollArea>
       </TabsContent>
@@ -109,6 +110,7 @@ export default function RequestEditor(props: RequestEditorProps) {
             onChange={props.onHeadersChange}
             addLabel={t("requestEditor.addHeader")}
             emptyLabel={t("detail.noHeaders")}
+            excludedTypes={["file"]}
           />
         </ScrollArea>
       </TabsContent>
@@ -119,6 +121,7 @@ export default function RequestEditor(props: RequestEditorProps) {
             onChange={props.onCookiesChange}
             addLabel={t("requestEditor.addCookie")}
             emptyLabel=""
+            excludedTypes={["file"]}
           />
         </ScrollArea>
       </TabsContent>

@@ -8,14 +8,15 @@ export interface ProxyConfig {
   upstream_proxy_port: number;
 }
 
-export interface SslWhitelistItem {
+export interface TlsWhitelistItem {
   domain: string;
   enabled: boolean;
 }
 
-export interface SslConfig {
+export interface TlsConfig {
   enabled: boolean;
-  whitelist: SslWhitelistItem[];
+  whitelist: TlsWhitelistItem[];
+  record_decrypted_only: boolean;
 }
 
 export interface ScriptItem {
@@ -31,6 +32,26 @@ export interface ScriptItem {
 export interface ScriptConfig {
   enabled: boolean;
   scripts: ScriptItem[];
+}
+
+export interface AuthzRule {
+  name: string;
+  /** 域名匹配规则（支持 * 通配符，如 *.example.com） */
+  domain: string;
+  /** HTTP 方法匹配（大写，如 "GET"）；空串 = any，匹配所有方法 */
+  method: string;
+  enabled: boolean;
+  /** 授权服务检查端点（HTTP/JSON） */
+  url: string;
+  /** 授权检查超时（毫秒） */
+  timeout_ms: number;
+  /** 授权服务不可用时的处置：closed = 拒绝 / open = 放行 */
+  on_error: "closed" | "open";
+}
+
+export interface AuthzConfig {
+  enabled: boolean;
+  rules: AuthzRule[];
 }
 
 /** 规则内来源条目：来源名与其会话合并 header 成对。
@@ -59,7 +80,7 @@ export interface AiConfig {
 
 export interface Settings {
   proxy: ProxyConfig;
-  ssl: SslConfig;
+  tls: TlsConfig;
   script: ScriptConfig;
   log: {
     level: string;

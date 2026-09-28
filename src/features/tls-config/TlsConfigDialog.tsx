@@ -1,25 +1,19 @@
 import { invoke } from "@tauri-apps/api/core";
 import { CheckIcon, PlusIcon, Trash2Icon, XIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { HintIcon } from "@/components/core/HintIcon";
 import { MatchTestRow } from "@/components/match-test/MatchTestRow";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useLocale } from "@/hooks/useLocale";
 import { useMatchTest } from "@/hooks/useMatchTest";
 import { cn } from "@/lib/utils";
-import type { SslConfig, SslWhitelistItem } from "@/types/settings";
+import type { TlsConfig, TlsWhitelistItem } from "@/types/settings";
 
 interface Props {
   open: boolean;
@@ -45,22 +39,23 @@ const HEADER_CELL =
 const ROW_INPUT =
   "h-6 rounded-sm border-transparent px-1.5 font-mono text-xs md:text-xs transition-colors hover:border-input/60 focus-visible:ring-1 dark:bg-transparent";
 
-export default function SslConfigDialog({ open, onOpenChange }: Props) {
+export default function TlsConfigDialog({ open, onOpenChange }: Props) {
   const { t } = useLocale();
   const [enabled, setEnabled] = useState(false);
-  const [whitelist, setWhitelist] = useState<SslWhitelistItem[]>([]);
+  const [recordDecryptedOnly, setRecordDecryptedOnly] = useState(true);
+  const [whitelist, setWhitelist] = useState<TlsWhitelistItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  // 匹配测试（按钮触发）：与运行时同一套 domain_match；SSL 仅按 host 匹配（matchPath=false）
+  // 匹配测试（按钮触发）：与运行时同一套 domain_match；TLS 仅按 host 匹配（matchPath=false）
   const { testUrl, setTestUrl, hits, tested, runTest } = useMatchTest(
     whitelist.map((i) => i.domain),
     false,
   );
   /** 行是否参与了本次测试 = 已启用 && 非空（与运行时生效条件一致） */
-  const rowEligible = (item: SslWhitelistItem) => tested && item.enabled && item.domain.trim() !== "";
-  const rowHit = (item: SslWhitelistItem, index: number) => rowEligible(item) && !!hits[index];
+  const rowEligible = (item: TlsWhitelistItem) => tested && item.enabled && item.domain.trim() !== "";
+  const rowHit = (item: TlsWhitelistItem, index: number) => rowEligible(item) && !!hits[index];
   const hitCount = whitelist.filter((item, i) => rowHit(item, i)).length;
 
   const listRef = useRef<HTMLDivElement>(null);
@@ -76,9 +71,10 @@ export default function SslConfigDialog({ open, onOpenChange }: Props) {
     setLoading(true);
     setError("");
     setTestUrl("");
-    invoke<SslConfig>("get_ssl_config")
+    invoke<TlsConfig>("get_tls_config")
       .then((config) => {
         setEnabled(config.enabled);
+        setRecordDecryptedOnly(config.record_decrypted_only);
         setWhitelist(config.whitelist);
       })
       .catch((err) => setError(String(err)))
@@ -122,14 +118,16 @@ export default function SslConfigDialog({ open, onOpenChange }: Props) {
     for (const item of cleaned) {
       const key = item.domain.toLowerCase();
       if (seen.has(key)) {
-        setError(`${t("sslConfig.duplicateDomain")}: ${item.domain}`);
+        setError(`${t("tlsConfig.duplicateDomain")}: ${item.domain}`);
         return;
       }
       seen.add(key);
     }
     setSaving(true);
     try {
-      await invoke("save_ssl_config", { ssl: { enabled, whitelist: cleaned } });
+      await invoke("save_tls_config", {
+        tls: { enabled, whitelist: cleaned, record_decrypted_only: recordDecryptedOnly },
+      });
       setWhitelist(cleaned);
       onOpenChange(false);
     } catch (err) {
@@ -144,10 +142,15 @@ export default function SslConfigDialog({ open, onOpenChange }: Props) {
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <div className="flex items-center gap-2.5">
-            <DialogTitle>{t("sslConfig.title")}</DialogTitle>
+            <DialogTitle>{t("tlsConfig.title")}</DialogTitle>
+            <HintIcon label={t("tlsConfig.description")} />
             <Switch checked={enabled} onCheckedChange={setEnabled} />
           </div>
-          <DialogDescription>{t("sslConfig.description")}</DialogDescription>
+          <div className="flex items-center gap-2.5 pt-1">
+            <span className="text-xs font-medium">{t("tlsConfig.recordDecryptedOnly")}</span>
+            <HintIcon label={t("tlsConfig.recordDecryptedOnlyHint")} />
+            <Switch checked={recordDecryptedOnly} onCheckedChange={setRecordDecryptedOnly} />
+          </div>
         </DialogHeader>
 
         {loading ? (
@@ -158,21 +161,21 @@ export default function SslConfigDialog({ open, onOpenChange }: Props) {
           >
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-muted-foreground">
-                {t("sslConfig.whitelistHeader")}
+                {t("tlsConfig.whitelistHeader")}
                 {whitelist.length > 0 && (
                   <span className="ml-1 font-normal opacity-80">
-                    {t("sslConfig.domainCount", { n: whitelist.length })}
+                    {t("tlsConfig.domainCount", { n: whitelist.length })}
                   </span>
                 )}
               </span>
               <Button variant="ghost" size="xs" onClick={addRow}>
                 <PlusIcon className="size-3.5" />
-                {t("sslConfig.addDomain")}
+                {t("tlsConfig.addDomain")}
               </Button>
             </div>
 
             {whitelist.length === 0 ? (
-              <p className="px-0.5 text-xs text-muted-foreground">{t("sslConfig.emptyWhitelist")}</p>
+              <p className="px-0.5 text-xs text-muted-foreground">{t("tlsConfig.emptyWhitelist")}</p>
             ) : (
               <div ref={listRef} className="max-h-80 overflow-y-auto rounded-[10px] border border-border">
                 <div
@@ -181,8 +184,8 @@ export default function SslConfigDialog({ open, onOpenChange }: Props) {
                     "sticky top-0 z-10 h-7 border-b border-border bg-[color-mix(in_oklab,var(--popover),var(--foreground)_3%)]",
                   )}
                 >
-                  <span className={cn(COL.enabled, HEADER_CELL)}>{t("sslConfig.colEnabled")}</span>
-                  <span className={cn(COL.domain, HEADER_CELL, "pl-1.5")}>{t("sslConfig.domain")}</span>
+                  <span className={cn(COL.enabled, HEADER_CELL)}>{t("tlsConfig.colEnabled")}</span>
+                  <span className={cn(COL.domain, HEADER_CELL, "pl-1.5")}>{t("tlsConfig.domain")}</span>
                   <span className={COL.actions} />
                 </div>
 
@@ -212,7 +215,7 @@ export default function SslConfigDialog({ open, onOpenChange }: Props) {
                             <Input
                               className={ROW_INPUT}
                               value={item.domain}
-                              placeholder={t("sslConfig.placeholderDomain")}
+                              placeholder={t("tlsConfig.placeholderDomain")}
                               autoFocus={item.domain === ""}
                               onChange={(e) => updateDomain(index, e.target.value)}
                               onKeyDown={(e) => {
@@ -249,7 +252,7 @@ export default function SslConfigDialog({ open, onOpenChange }: Props) {
                           <Trash2Icon className="size-3.5" />
                         </TooltipTrigger>
                         <TooltipContent side="top" className="bg-popover text-popover-foreground text-ui-sm">
-                          {t("sslConfig.delete")}
+                          {t("tlsConfig.delete")}
                         </TooltipContent>
                       </Tooltip>
                     </span>
@@ -279,10 +282,10 @@ export default function SslConfigDialog({ open, onOpenChange }: Props) {
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            {t("sslConfig.cancel")}
+            {t("tlsConfig.cancel")}
           </Button>
           <Button variant="outline" onClick={handleSave} disabled={loading || saving}>
-            {saving ? t("sslConfig.saving") : t("sslConfig.save")}
+            {saving ? t("tlsConfig.saving") : t("tlsConfig.save")}
           </Button>
         </DialogFooter>
       </DialogContent>

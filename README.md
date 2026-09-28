@@ -43,7 +43,7 @@ When you call an AI API, all you see is input and output. But when token usage s
 - **HTTP/HTTPS proxy** — MITM reverse proxy based on rama, with TLS decryption
 - **Automatic system proxy** — auto-set / auto-clear system proxy settings on start / stop (Windows / macOS / Linux)
 - **Upstream proxy chaining** — forward through an upstream proxy for corporate network environments
-- **SSL certificate management** — generate, install, and export self-signed CA certificates with one click
+- **TLS certificate management** — generate, install, and export self-signed CA certificates with one click
 
 ### AI Protocol Parsing
 
@@ -108,13 +108,13 @@ client = OpenAI(http_client=httpx.Client(proxy="http://127.0.0.1:5201"))
 // export NODE_EXTRA_CA_CERTS=~/.ai-proxy/ca-cert.pem
 ```
 
-> Since the proxy uses a self-signed certificate, HTTPS requests require the client to trust it. Complete the SSL setup below before first use.
+> Since the proxy uses a self-signed certificate, HTTPS requests require the client to trust it. Complete the TLS setup below before first use.
 
 ### 3. Install the CA Certificate (required for HTTPS)
 
 The proxy decrypts HTTPS traffic via MITM, so clients need to trust the proxy's generated CA certificate.
 
-Click the **lock icon** in the left toolbar or bottom bar to open the **SSL Config dialog**:
+Click the **lock icon** in the left toolbar or bottom bar to open the **TLS Config dialog**:
 
 1. The certificate is auto-generated on first launch
 2. Click **"Install CA Certificate"** — your OS will prompt for authorization:
@@ -133,7 +133,7 @@ For the proxy to recognize and parse AI API traffic, three switches work togethe
 |-------|-------|---------|
 | **AI detection master switch** | Bottom bar `AI` badge / AI Config dialog | Controls whether traffic gets AI protocol parsing and normalization |
 | **URL rules** | Left toolbar 📡 icon → AI Config dialog | Defines which URLs match which AI provider (OpenAI / Anthropic / Gemini) |
-| **SSL decryption** | Bottom bar / SSL Config dialog | Domain whitelist for MITM decryption — encrypted bodies are invisible without it |
+| **TLS decryption** | Bottom bar / TLS Config dialog | Domain whitelist for MITM decryption — encrypted bodies are invisible without it |
 
 **Step-by-step:**
 
@@ -147,7 +147,7 @@ For the proxy to recognize and parse AI API traffic, three switches work togethe
    - `*.openai.azure.com/openai/deployments/*/chat/completions` → OpenAI
    - `generativelanguage.googleapis.com/v1beta/models/*` → Gemini
    - `openrouter.ai/api/v1/chat/completions` → Auto-detect
-4. **Close and save**: clicking Save will **automatically enable SSL decryption** and add all enabled-rule domains to the SSL whitelist
+4. **Close and save**: clicking Save will **automatically enable TLS decryption** and add all enabled-rule domains to the TLS whitelist
 5. **Verify rules**: use the match-test bar at the bottom of the dialog to test real URLs against your rules
 
 **Each URL rule can be configured with:**
@@ -209,7 +209,7 @@ Check: ① Is the proxy running? (bottom status bar should show "Running on 127.
 <details>
 <summary><strong>I see "certificate error" on HTTPS requests — how do I fix it?</strong></summary>
 
-Export the CA certificate (`.pem` format) from the SSL Config dialog and trust it in your system or SDK. For Python SDKs, you can set `verify=False` (development only). For Node.js, set `NODE_TLS_REJECT_UNAUTHORIZED=0`.
+Export the CA certificate (`.pem` format) from the TLS Config dialog and trust it in your system or SDK. For Python SDKs, you can set `verify=False` (development only). For Node.js, set `NODE_TLS_REJECT_UNAUTHORIZED=0`.
 </details>
 
 <details>
@@ -333,7 +333,7 @@ No notification is needed — all intercepted traffic appears in real time in th
 │   │   ├── ai-view/              # AI conversation view
 │   │   ├── ai-config/            # AI detection config dialog
 │   │   ├── settings/             # Settings dialog
-│   │   ├── ssl-config/           # SSL config dialog
+│   │   ├── tls-config/           # TLS config dialog
 │   │   ├── script-config/        # Script config dialog
 │   │   ├── title-bar/            # Custom title bar + tabs
 │   │   ├── tool-bar/             # Left icon toolbar

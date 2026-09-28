@@ -45,6 +45,19 @@ pub(crate) enum ProxyEvent {
         id: u64,
         error: String,
     },
+    /// extAuthz 授权拒绝（请求被外部授权服务拦下，不落库、不转发）。
+    /// 前端据此合成一条实时列表条目，与正常 Request/Response 区分呈现。
+    Denied {
+        id: u64,
+        method: String,
+        uri: String,
+        timestamp: i64,
+        headers: HashMap<String, String>,
+        query_params: HashMap<String, String>,
+        decrypted: bool,
+        status: u16,
+        reason: String,
+    },
     /// 时间线事件：delta（流式/请求侧增量）或 snapshot（finalize 整条快照）。
     /// 前端不再做 LCP 去重：snapshot 整体替换，delta 按「移除本次 request_id 的
     /// 旧条目 + 追加」机械应用。turns 内 thinking 正文已剥（按需 get_ai_thinking）。

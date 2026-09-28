@@ -144,6 +144,12 @@ export default function RequestSendPanel({
           <InputGroupInput
             value={url}
             onChange={(e) => onUrlChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.nativeEvent.isComposing && !sending) {
+                e.preventDefault();
+                onSend();
+              }
+            }}
             className="text-prose-md font-mono"
             placeholder="https://api.example.com/v1/endpoint"
             disabled={sending}

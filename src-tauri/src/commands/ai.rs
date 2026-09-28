@@ -1,6 +1,6 @@
 use crate::proxy::ai::AiTimelineTurnDto;
 use crate::proxy::state::AppState;
-use crate::storage::ai::AiSessionSummary;
+use crate::storage::ai::{AiSessionSummary, AiUsageSummary};
 
 /// 列出所有 AI 会话摘要（元信息 + 每请求元信息，不含 timeline turns）。
 /// 前端启动时拉取一次，历史会话据此恢复；turns 按需经 `get_ai_session` 拉取。
@@ -37,5 +37,18 @@ pub async fn get_ai_thinking(
     state
         .db()
         .get_ai_thinking(&session_id, request_id, fingerprint)
+        .map_err(|e| format!("db: {e:?}"))
+}
+
+/// 汇总 [start_ms, end_ms) 区间内的请求数与 token 用量（期间筛选统计面板用）。
+#[tauri::command]
+pub async fn get_ai_usage_summary(
+    state: tauri::State<'_, AppState>,
+    start_ms: i64,
+    end_ms: i64,
+) -> Result<AiUsageSummary, String> {
+    state
+        .db()
+        .get_ai_usage_summary(start_ms, end_ms)
         .map_err(|e| format!("db: {e:?}"))
 }

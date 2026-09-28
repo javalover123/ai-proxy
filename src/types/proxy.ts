@@ -67,6 +67,18 @@ export type ProxyEvent =
     }
   | { type: "error"; id: number; error: string }
   | {
+      type: "denied";
+      id: number;
+      method: string;
+      uri: string;
+      timestamp: number;
+      headers: Record<string, string>;
+      query_params: Record<string, string>;
+      decrypted: boolean;
+      status: number;
+      reason: string;
+    }
+  | {
       type: "ai_timeline";
       session_id: string;
       request_id: number;
@@ -123,4 +135,7 @@ export interface TrafficEntry {
   /** 响应流异常终止原因；null = 正常 EOS。error 表示整个请求失败，本字段表示 body 没走完 */
   terminated: TerminationReason | null;
   decrypted?: boolean;
+  /** extAuthz 授权拒绝（不落库，仅实时列表可见） */
+  denied?: boolean;
+  deniedReason?: string;
 }

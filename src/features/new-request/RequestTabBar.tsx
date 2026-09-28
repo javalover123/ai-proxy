@@ -3,7 +3,6 @@
 import { ChevronDownIcon, XIcon } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,32 +10,17 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
+import type { EnvController } from "@/hooks/useEnvironments";
 import { useLocale } from "@/hooks/useLocale";
 import { cn } from "@/lib/utils";
 import type { RequestTab } from "@/types/collection";
-
-export interface EnvItem {
-  id: string;
-  name: string;
-  urlPrefix: string;
-}
-
-export type EnvMode = string;
-
-const DEFAULT_ENVS: EnvItem[] = [
-  { id: "production", name: "", urlPrefix: "" },
-  { id: "test", name: "", urlPrefix: "" },
-];
+import { EnvironmentDialog } from "./EnvironmentDialog";
 
 interface RequestTabBarProps {
   tabs: RequestTab[];
   activeTabId: string | null;
-  env: EnvMode;
-  envs: EnvItem[];
-  onEnvChange: (env: EnvMode) => void;
-  onEnvsChange: (envs: EnvItem[]) => void;
+  envController: EnvController;
   onActivate: (tabId: string) => void;
   onClose: (tabId: string) => void;
   onNew: () => void;
@@ -47,10 +31,7 @@ interface RequestTabBarProps {
 export default function RequestTabBar({
   tabs,
   activeTabId,
-  env,
-  envs,
-  onEnvChange,
-  onEnvsChange,
+  envController,
   onActivate,
   onClose,
   onNew,
@@ -61,39 +42,8 @@ export default function RequestTabBar({
   const scrollRef = useRef<HTMLDivElement>(null);
   const [envDialogOpen, setEnvDialogOpen] = useState(false);
   const [canFit, setCanFit] = useState(true);
-  const [editEnvs, setEditEnvs] = useState<EnvItem[]>([]);
 
-  const openEnvDialog = useCallback(() => {
-    setEditEnvs(envs.length > 0 ? envs.map((e) => ({ ...e })) : DEFAULT_ENVS.map((e) => ({ ...e })));
-    setEnvDialogOpen(true);
-  }, [envs]);
-
-  const handleSaveEnvs = useCallback(() => {
-    const valid = editEnvs.filter((e) => e.name.trim());
-    onEnvsChange(valid);
-    if (!valid.find((e) => e.id === env) && valid.length > 0) {
-      onEnvChange(valid[0].id);
-    }
-    setEnvDialogOpen(false);
-  }, [editEnvs, env, onEnvsChange, onEnvChange]);
-
-  const handleAddEnv = useCallback(() => {
-    setEditEnvs((prev) => [...prev, { id: crypto.randomUUID(), name: "", urlPrefix: "" }]);
-  }, []);
-
-  const handleDeleteEnv = useCallback((id: string) => {
-    setEditEnvs((prev) => prev.filter((e) => e.id !== id));
-  }, []);
-
-  const handleEditEnv = useCallback((id: string, field: "name" | "urlPrefix", value: string) => {
-    setEditEnvs((prev) => prev.map((e) => (e.id === id ? { ...e, [field]: value } : e)));
-  }, []);
-
-  const envLabel = (envId: string) => {
-    const found = envs.find((e) => e.id === envId);
-    if (found?.name) return found.name;
-    return t(envId === "production" ? "tab.envProduction" : "tab.envTest");
-  };
+  const activeEnvName = envController.activeEnv?.name ?? "";
 
   // 简单判断：滚动宽度 > 可用宽度 = 放不下
   const checkFit = useCallback(() => {
@@ -278,13 +228,13 @@ export default function RequestTabBar({
 
       {/* 环境切换 — 滚动区外，最右侧 */}
       <Select
-        value={env}
+        value={envController.activeEnvId != null ? String(envController.activeEnvId) : ""}
         onValueChange={(v) => {
-          if (v) onEnvChange(v);
+          if (v) envController.setActiveEnv(Number(v));
         }}
       >
         <SelectTrigger className="h-7 w-auto px-2 shrink-0 gap-1 text-xs border-0 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 data-[size=sm]:h-7 text-muted-foreground hover:text-foreground transition-colors">
-          <span className="flex-1 text-left">{envLabel(env)}</span>
+          <span className="flex-1 text-left">{activeEnvName}</span>
         </SelectTrigger>
         <SelectContent
           align="start"
@@ -293,9 +243,9 @@ export default function RequestTabBar({
           sideOffset={4}
           className="min-w-[100px] [&_[data-slot=select-item]]:py-1 [&_[data-slot=select-item]]:text-xs"
         >
-          {envs.map((e) => (
-            <SelectItem key={e.id} value={e.id}>
-              {envLabel(e.id)}
+          {envController.environments.map((e) => (
+            <SelectItem key={e.id} value={String(e.id)}>
+              {e.name}
             </SelectItem>
           ))}
         </SelectContent>
@@ -306,7 +256,7 @@ export default function RequestTabBar({
         variant="ghost"
         size="icon-sm"
         className="h-7 w-7 shrink-0 ml-0.5"
-        onClick={openEnvDialog}
+        onClick={() => setEnvDialogOpen(true)}
         aria-label={t("tab.envManagement")}
       >
         <svg
@@ -324,51 +274,7 @@ export default function RequestTabBar({
       </Button>
 
       {/* 环境管理弹窗 */}
-      <Dialog open={envDialogOpen} onOpenChange={setEnvDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>{t("tab.envManagement")}</DialogTitle>
-          </DialogHeader>
-          <div className="flex flex-col gap-3">
-            {editEnvs.map((e) => (
-              <div key={e.id} className="flex items-center gap-2">
-                <Input
-                  className="flex-1 h-7 text-prose-sm"
-                  placeholder={t("tab.envName")}
-                  value={e.name}
-                  onChange={(ev) => handleEditEnv(e.id, "name", ev.target.value)}
-                />
-                <Input
-                  className="flex-1 h-7 text-prose-sm"
-                  placeholder={t("tab.envUrlPrefix")}
-                  value={e.urlPrefix}
-                  onChange={(ev) => handleEditEnv(e.id, "urlPrefix", ev.target.value)}
-                />
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
-                  onClick={() => handleDeleteEnv(e.id)}
-                  aria-label={t("tab.envDelete")}
-                >
-                  <XIcon className="size-3" />
-                </Button>
-              </div>
-            ))}
-            <Button variant="outline" size="sm" className="text-xs" onClick={handleAddEnv}>
-              + {t("tab.envAdd")}
-            </Button>
-          </div>
-          <div className="flex justify-end gap-2 mt-2">
-            <Button variant="outline" size="sm" className="text-xs" onClick={() => setEnvDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button size="sm" className="text-xs" onClick={handleSaveEnvs}>
-              {t("settings.save")}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <EnvironmentDialog open={envDialogOpen} onOpenChange={setEnvDialogOpen} controller={envController} />
     </div>
   );
 }

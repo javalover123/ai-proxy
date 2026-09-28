@@ -30,6 +30,7 @@ use rama::tls::server::peek_client_hello_from_input;
 use super::client::forward_to_upstream;
 use super::events::ProxyEvent;
 use super::ext::RequestExt;
+use super::layer::authz::ExtAuthzLayer;
 use super::layer::direct::direct_reply_layer;
 use super::layer::script::ScriptLayer;
 use super::layer::traffic_record::TrafficRecorderLayer;
@@ -56,7 +57,7 @@ pub(crate) async fn http_connect_proxy(upgraded: Upgraded) -> Result<(), Infalli
 
     // SNI 命中已启用的 MITM 白名单 → 解密；否则（无 SNI 或未命中）→ 隧道透传。
     match sni {
-        Some(host) if state.settings().ssl.should_mitm(&host) => {
+        Some(host) if state.settings().tls.should_mitm(&host) => {
             log::info!(
                 "CONNECT TLS, SNI={}, in MITM whitelist, routing to MITM",
                 host
@@ -121,7 +122,12 @@ async fn tunnel_connect_proxy<P>(
     P: Io + ExtensionsRef + std::marker::Unpin,
 {
     let request_id = crate::storage::id::next_request_id();
-    let event_channel = state.event_channel();
+    // 仅记录已解密的流量：开启时未解密（隧道透传）请求不再上报前端。
+    let event_channel = if state.settings().tls.record_decrypted_only {
+        None
+    } else {
+        state.event_channel()
+    };
     let uri = authority
         .as_ref()
         .map(|a| Uri::from_authority(protocol.clone(), a.clone()).to_string())
@@ -228,6 +234,8 @@ pub(crate) fn new_http_mitm_proxy()
             ConsumeErrLayer::default(),
             RemoveResponseHeaderLayer::hop_by_hop(),
             RemoveRequestHeaderLayer::hop_by_hop(),
+            // 授权先于脚本：被拒的请求在此短路，不进入 ScriptLayer / 录制 / 转发。
+            ExtAuthzLayer,
             ScriptLayer,
             // TrafficRecorderLayer is the error boundary:
             // BoxError from forward_to_upstream → Infallible via error_response.

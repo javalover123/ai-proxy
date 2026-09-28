@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 pub(crate) mod ai;
 pub(crate) mod collection_nodes;
 pub(crate) mod collection_requests;
+pub(crate) mod environments;
 pub(crate) mod id;
 pub(crate) mod traffic;
 
@@ -78,13 +79,19 @@ mod tests {
     }
 }
 
-/// A key-value pair representing an HTTP header.
+/// A key-value pair representing an HTTP header / query param / cookie entry.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct HeaderPair {
     pub key: String,
     pub value: String,
     #[serde(default = "default_true")]
     pub enabled: bool,
+    /// 值类型提示（编辑器元数据，wire 上除 file/text 外无区别）
+    #[serde(rename = "type", default, skip_serializing_if = "Option::is_none")]
+    pub value_type: Option<String>,
+    /// 自由文本备注（编辑器元数据）
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
 }
 
 fn default_true() -> bool {

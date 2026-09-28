@@ -1,18 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
 import { CheckIcon, PencilIcon, PlusIcon, Trash2Icon, XIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { HintIcon } from "@/components/core/HintIcon";
 import { MatchTestRow } from "@/components/match-test/MatchTestRow";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
@@ -30,7 +24,7 @@ interface Props {
   onEditScript: (item: ScriptItem) => void;
 }
 
-/** 五列网格：表头与数据行共用，保证列对齐（与 SSL/AI 配置同构） */
+/** 五列网格：表头与数据行共用，保证列对齐（与 TLS/AI 配置同构） */
 const ROW_GRID = "flex items-center gap-2.5 px-3";
 const COL = {
   enabled: "flex w-4 shrink-0 justify-start",
@@ -176,9 +170,9 @@ export default function ScriptConfigDialog({ open, onOpenChange, onEditScript }:
         <DialogHeader>
           <div className="flex items-center gap-2.5">
             <DialogTitle>{t("scriptConfig.title")}</DialogTitle>
+            <HintIcon label={t("scriptConfig.description")} />
             <Switch checked={enabled} onCheckedChange={setEnabled} />
           </div>
-          <DialogDescription>{t("scriptConfig.description")}</DialogDescription>
         </DialogHeader>
 
         {loading ? (

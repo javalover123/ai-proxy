@@ -120,3 +120,11 @@ export interface AiSessionSummary {
   usageTotal: AiUsage;
   requests: AiRequestMeta[];
 }
+
+/** 后端 get_ai_usage_summary 返回的期间用量汇总（[startMs, endMs) 内） */
+export interface AiUsageSummary {
+  requestCount: number;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+}

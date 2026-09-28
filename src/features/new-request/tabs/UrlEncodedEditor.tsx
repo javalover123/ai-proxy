@@ -45,6 +45,7 @@ export default function UrlEncodedEditor({ body, onChange }: UrlEncodedEditorPro
       onChange={handleChange}
       addLabel={t("requestEditor.bodyUrlEncodedAddField")}
       emptyLabel=""
+      excludedTypes={["file"]}
     />
   );
 }

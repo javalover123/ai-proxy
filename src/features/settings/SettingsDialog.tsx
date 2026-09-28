@@ -3,17 +3,11 @@ import { invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
 import { DownloadIcon, GlobeIcon, MonitorIcon, MoonIcon, ServerIcon, ShieldCheckIcon, SunIcon } from "lucide-react";
 import { useEffect, useState } from "react";
+import { HintIcon } from "@/components/core/HintIcon";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -54,6 +48,9 @@ const inputClass = "h-auto w-full";
 const portInputClass = "h-auto w-18 shrink-0 no-spinner";
 /** 标签行固定行高，让监听/上游两行的输入框保持同一竖直节奏（上游那行标签带复选框） */
 const fieldLabelClass = "flex h-4 items-center text-xs font-medium text-muted-foreground";
+/** 上游代理地址/端口默认值：仅在地址留空或端口未填时兜底，直接在前端给出 */
+const DEFAULT_UPSTREAM_HOST = "127.0.0.1";
+const DEFAULT_UPSTREAM_PORT = 7890;
 
 export default function SettingsDialog({
   open,
@@ -69,8 +66,8 @@ export default function SettingsDialog({
     listen_host: "127.0.0.1",
     listen_port: 5201,
     upstream_proxy_enabled: true,
-    upstream_proxy_host: "",
-    upstream_proxy_port: 0,
+    upstream_proxy_host: DEFAULT_UPSTREAM_HOST,
+    upstream_proxy_port: DEFAULT_UPSTREAM_PORT,
   });
   const [language, setLanguage] = useState<LocaleSetting>("system");
   const [loading, setLoading] = useState(false);
@@ -81,13 +78,28 @@ export default function SettingsDialog({
   const [certInstalling, setCertInstalling] = useState(false);
   const [certMsg, setCertMsg] = useState("");
 
+  // 上游代理开关：需地址与端口都填好才允许勾选，否则屏蔽（不提示）
+  const upstreamProxyValid =
+    proxy.upstream_proxy_host.trim() !== "" && proxy.upstream_proxy_port >= 1 && proxy.upstream_proxy_port <= 65535;
+
+  // 地址/端口被清空后自动取消勾选，避免出现「已勾选但被禁用」的矛盾态
+  useEffect(() => {
+    if (!upstreamProxyValid && proxy.upstream_proxy_enabled) {
+      setProxy((p) => ({ ...p, upstream_proxy_enabled: false }));
+    }
+  }, [upstreamProxyValid, proxy.upstream_proxy_enabled]);
+
   useEffect(() => {
     if (!open) return;
     setLoading(true);
     setError("");
     Promise.all([invoke<{ proxy: ProxyConfig }>("get_settings"), invoke<LocaleSetting>("get_locale")])
       .then(([settings, locale]) => {
-        setProxy(settings.proxy);
+        setProxy({
+          ...settings.proxy,
+          upstream_proxy_host: settings.proxy.upstream_proxy_host.trim() || DEFAULT_UPSTREAM_HOST,
+          upstream_proxy_port: settings.proxy.upstream_proxy_port || DEFAULT_UPSTREAM_PORT,
+        });
         setLanguage(locale);
       })
       .catch((err) => setError(String(err)))
@@ -140,8 +152,10 @@ export default function SettingsDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{t("settings.title")}</DialogTitle>
-          <DialogDescription>{t("settings.description")}</DialogDescription>
+          <div className="flex items-center gap-2.5">
+            <DialogTitle>{t("settings.title")}</DialogTitle>
+            <HintIcon label={t("settings.description")} />
+          </div>
         </DialogHeader>
 
         {loading ? (
@@ -240,7 +254,10 @@ export default function SettingsDialog({
                 </div>
 
                 <div className="grid gap-1.5">
-                  <span className="text-xs font-medium text-muted-foreground">{t("settings.proseFontSize")}</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-medium text-muted-foreground">{t("settings.proseFontSize")}</span>
+                    <HintIcon label={t("settings.proseFontSizeHint")} />
+                  </div>
                   <ToggleGroup
                     value={[proseFontSize]}
                     onValueChange={(value) => {
@@ -265,7 +282,6 @@ export default function SettingsDialog({
                       </ToggleGroupItem>
                     ))}
                   </ToggleGroup>
-                  <p className="text-ui-sm text-muted-foreground/70">{t("settings.proseFontSizeHint")}</p>
                 </div>
               </TabsContent>
 
@@ -297,16 +313,17 @@ export default function SettingsDialog({
                         <Checkbox
                           id="upstream-proxy-enabled"
                           checked={proxy.upstream_proxy_enabled}
+                          disabled={!upstreamProxyValid}
                           onCheckedChange={(checked) => setProxy((p) => ({ ...p, upstream_proxy_enabled: !!checked }))}
                         />
                         <Label htmlFor="upstream-proxy-enabled" className="text-xs font-medium text-muted-foreground">
                           {t("settings.upstreamProxyHost")}
                         </Label>
+                        <HintIcon label={t("settings.upstreamProxyHint")} />
                       </div>
                       <Input
                         className={inputClass}
                         placeholder={t("settings.upstreamProxyHostPlaceholder")}
-                        disabled={!proxy.upstream_proxy_enabled}
                         value={proxy.upstream_proxy_host}
                         onChange={(e) => setProxy((p) => ({ ...p, upstream_proxy_host: e.target.value }))}
                       />
@@ -314,10 +331,9 @@ export default function SettingsDialog({
                     <Input
                       className={portInputClass}
                       type="number"
-                      min={0}
+                      min={1}
                       max={65535}
                       aria-label={t("settings.upstreamProxyPort")}
-                      disabled={!proxy.upstream_proxy_enabled}
                       value={proxy.upstream_proxy_port || ""}
                       onChange={(e) =>
                         setProxy((p) => ({
@@ -327,12 +343,14 @@ export default function SettingsDialog({
                       }
                     />
                   </div>
-                  <p className="text-ui-sm text-muted-foreground/70">{t("settings.upstreamProxyHint")}</p>
                 </div>
               </TabsContent>
 
               <TabsContent value="certificate" className="grid gap-4">
-                <p className="text-xs text-muted-foreground">{t("settings.certHint")}</p>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-medium text-muted-foreground">{t("settings.certificateTab")}</span>
+                  <HintIcon label={t("settings.certHint")} />
+                </div>
 
                 {/* 安装证书 */}
                 <div className="rounded-lg border border-border bg-surface-deep p-3">

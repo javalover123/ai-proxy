@@ -93,3 +93,42 @@ fn cached_client(skip_tls_verify: bool) -> BoxService<Request, Response, BoxErro
     // get_or_init：多个请求竞争时只有第一个构建，其余等待后复用。
     slot.get_or_init(|| svc).clone()
 }
+
+/// extAuthz 授权检查用的**直连**客户端：不上游代理、不内置超时（超时由调用方
+/// 按规则 `timeout_ms` 用 `tokio::time::timeout` 施加）。TLS 校验姿态与上游一致
+/// （skip-verify，适配自签名测试环境）。
+pub(crate) fn authz_client() -> BoxService<Request, Response, BoxError> {
+    use std::sync::OnceLock;
+
+    static CLIENT: OnceLock<BoxService<Request, Response, BoxError>> = OnceLock::new();
+
+    CLIENT
+        .get_or_init(|| {
+            // 跳过 TLS 验证（与上游 client 同一种信任假设）
+            let tls_config =
+                TlsClientConfig::default_http().with_server_verify(ServerVerifyMode::Disable);
+
+            // 直连：无 ProxyRoute 注入，`with_proxy_support` 的 optional 连接器回落直连，
+            // 不会经上游代理转发。TLS 校验姿态与上游 client 一致（skip-verify）。
+            let client = EasyHttpWebClient::connector_builder()
+                .with_default_transport_connector()
+                .with_default_dns_connector()
+                .with_tls_proxy_support_using_rustls()
+                .with_proxy_support()
+                .with_tls_support_using_rustls_and_default_http_version(
+                    tls_config,
+                    Version::HTTP_11,
+                )
+                .with_default_http_connector(Executor::default())
+                .with_default_connection_pool()
+                .build_client();
+
+            (
+                MapResponseBodyLayer::new_boxed_streaming_body(),
+                DecompressionLayer::new().with_insert_accept_encoding_header(false),
+            )
+                .into_layer(client)
+                .boxed()
+        })
+        .clone()
+}

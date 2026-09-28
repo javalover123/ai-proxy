@@ -165,6 +165,49 @@ export function useProxyEvents() {
           triggerUpdate();
           break;
         }
+        case "denied": {
+          const { id, method, uri, timestamp, headers, query_params, decrypted, status, reason } = event;
+          counterRef.current += 1;
+
+          // FIFO 淘汰：超出上限时删最旧条目（与 request 分支同构）
+          if (entriesRef.current.size >= MAX_ENTRIES) {
+            const oldest = insertionOrderRef.current.shift();
+            if (oldest !== undefined) {
+              chunkBytesRef.current.delete(oldest);
+              entriesRef.current.delete(oldest);
+            }
+          }
+          if (entriesRef.current.size >= SLIM_AT) {
+            slimOldest();
+          }
+          insertionOrderRef.current.push(id);
+
+          // 被拒请求无对应 Request 事件，据此合成一条完整条目（不落库，仅实时可见）。
+          entriesRef.current.set(id, {
+            id,
+            method,
+            uri,
+            requestNumber: counterRef.current,
+            requestTimestamp: timestamp,
+            requestHeaders: headers,
+            requestBody: null,
+            requestQuery: query_params,
+            decrypted,
+            requestContentType: undefined,
+            status,
+            responseTimestamp: null,
+            durationMs: null,
+            responseHeaders: null,
+            responseChunks: [],
+            responseContentType: undefined,
+            error: null,
+            terminated: null,
+            denied: true,
+            deniedReason: reason,
+          });
+          triggerUpdate();
+          break;
+        }
         case "ai_timeline":
         case "ai_session": {
           // AI 事件转发到独立总线，由 useAiSessions 消费；不污染 entries。

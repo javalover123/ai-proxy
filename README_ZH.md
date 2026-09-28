@@ -43,7 +43,7 @@
 - **HTTP/HTTPS 代理** — 基于 rama 的 MITM 反向代理，支持 TLS 解密
 - **系统代理自动配置** — 启动/停止代理时自动设置/清除系统代理（Windows / macOS / Linux）
 - **上游代理链** — 支持通过上游代理转发，兼容企业网络环境
-- **SSL 证书管理** — 自签名 CA 证书生成、安装、导出，一键信任
+- **TLS 证书管理** — 自签名 CA 证书生成、安装、导出，一键信任
 
 ### AI 协议解析
 
@@ -108,13 +108,13 @@ client = OpenAI(http_client=httpx.Client(proxy="http://127.0.0.1:5201"))
 // export NODE_EXTRA_CA_CERTS=~/.ai-proxy/ca-cert.pem
 ```
 
-> 由于代理使用自签名证书，HTTPS 请求需要客户端信任该证书。首次使用前需要完成下面的 SSL 配置步骤。
+> 由于代理使用自签名证书，HTTPS 请求需要客户端信任该证书。首次使用前需要完成下面的 TLS 配置步骤。
 
 ### 3. 安装 CA 证书（HTTPS 必需）
 
 代理通过 MITM 解密 HTTPS 流量，需要客户端信任代理生成的 CA 证书。
 
-点击左侧工具栏的**锁图标**或底部栏的锁图标打开 **SSL 配置弹窗**：
+点击左侧工具栏的**锁图标**或底部栏的锁图标打开 **TLS 配置弹窗**：
 
 1. 首次使用时证书会自动生成
 2. 点击**"安装 CA 证书"**，系统会弹出授权对话框：
@@ -133,7 +133,7 @@ client = OpenAI(http_client=httpx.Client(proxy="http://127.0.0.1:5201"))
 |------|----------|------|
 | **AI 检测总开关** | 底部状态栏 `AI` 标签 / AI 配置弹窗 | 控制是否对流量执行 AI 协议解析和归一化 |
 | **URL 规则** | 左侧工具栏 📡 图标 → AI 配置弹窗 | 定义哪些 URL 匹配哪种 AI 厂商（OpenAI / Anthropic / Gemini） |
-| **SSL 解密** | 底部栏 / SSL 配置弹窗 | MITM 解密 HTTPS 流量的域名白名单——不解密就无法看到加密 body |
+| **TLS 解密** | 底部栏 / TLS 配置弹窗 | MITM 解密 HTTPS 流量的域名白名单——不解密就无法看到加密 body |
 
 **操作流程：**
 
@@ -147,7 +147,7 @@ client = OpenAI(http_client=httpx.Client(proxy="http://127.0.0.1:5201"))
    - `*.openai.azure.com/openai/deployments/*/chat/completions` → OpenAI
    - `generativelanguage.googleapis.com/v1beta/models/*` → Gemini
    - `openrouter.ai/api/v1/chat/completions` → 自动检测
-4. **关闭弹窗**：点击 Save 保存——后端会**自动联动开启 SSL 解密**，并将所有启用规则的域名写入 SSL 白名单
+4. **关闭弹窗**：点击 Save 保存——后端会**自动联动开启 TLS 解密**，并将所有启用规则的域名写入 TLS 白名单
 5. **验证规则**：弹窗底部的匹配测试栏可以输入真实 URL 验证规则是否命中
 
 **每个 URL 规则可以配置：**
@@ -209,7 +209,7 @@ client = OpenAI(http_client=httpx.Client(proxy="http://127.0.0.1:5201"))
 <details>
 <summary><strong>HTTPS 请求显示"证书错误"怎么办？</strong></summary>
 
-在 SSL 配置弹窗中导出 CA 证书（`.pem` 格式），然后在你的系统或 SDK 中信任它。对于 Python SDK，可以设置 `verify=False`（仅限开发环境）；对于 Node.js，设置 `NODE_TLS_REJECT_UNAUTHORIZED=0`。
+在 TLS 配置弹窗中导出 CA 证书（`.pem` 格式），然后在你的系统或 SDK 中信任它。对于 Python SDK，可以设置 `verify=False`（仅限开发环境）；对于 Node.js，设置 `NODE_TLS_REJECT_UNAUTHORIZED=0`。
 </details>
 
 <details>
@@ -333,7 +333,7 @@ function onResponse(ctx) {
 │   │   ├── ai-view/              # AI 对话视图
 │   │   ├── ai-config/            # AI 检测配置弹窗
 │   │   ├── settings/             # 设置弹窗
-│   │   ├── ssl-config/           # SSL 配置弹窗
+│   │   ├── tls-config/           # TLS 配置弹窗
 │   │   ├── script-config/        # 脚本配置弹窗
 │   │   ├── title-bar/            # 自定义标题栏 + 标签页
 │   │   ├── tool-bar/             # 左侧图标工具栏

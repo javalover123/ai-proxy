@@ -8,26 +8,43 @@ use std::path::PathBuf;
 
 const CONFIG_FILE_NAME: &str = "setting.json";
 
-/// SSL 解密白名单项
+/// TLS 解密白名单项
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct SslWhitelistItem {
+pub struct TlsWhitelistItem {
     pub domain: String,
     #[serde(default)]
     pub enabled: bool,
 }
 
-/// SSL 解密配置
-#[derive(Debug, Clone, Default, Deserialize, Serialize)]
-pub struct SslConfig {
-    /// 全局 SSL 解密开关
+/// TLS 解密配置
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct TlsConfig {
+    /// 全局 TLS 解密开关
     #[serde(default)]
     pub enabled: bool,
     /// 域名白名单，每项可单独开关
     #[serde(default)]
-    pub whitelist: Vec<SslWhitelistItem>,
+    pub whitelist: Vec<TlsWhitelistItem>,
+    /// 仅记录已解密的流量：未命中白名单走隧道的请求不再上报前端
+    #[serde(default = "default_record_decrypted_only")]
+    pub record_decrypted_only: bool,
 }
 
-impl SslConfig {
+fn default_record_decrypted_only() -> bool {
+    true
+}
+
+impl Default for TlsConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            whitelist: Vec::new(),
+            record_decrypted_only: true,
+        }
+    }
+}
+
+impl TlsConfig {
     /// host 是否命中已启用的 MITM 解密白名单。
     /// 总开关关闭时恒为 false，不再迭代白名单。
     pub fn should_mitm(&self, host: &str) -> bool {
@@ -77,6 +94,68 @@ pub struct ScriptConfig {
     /// 脚本列表，每项可单独开关
     #[serde(default)]
     pub scripts: Vec<ScriptItem>,
+}
+
+/// 授权服务不可用（超时 / 连接失败）时的处置。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AuthzOnError {
+    /// 拒绝（安全默认）
+    #[default]
+    Closed,
+    /// 放行
+    Open,
+}
+
+/// extAuthz 授权规则项
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct AuthzRule {
+    /// 规则名（仅展示与日志用途）
+    #[serde(default)]
+    pub name: String,
+    /// 域名匹配规则（支持 * 通配符，如 *.example.com）
+    #[serde(default)]
+    pub domain: String,
+    /// HTTP 方法匹配（大写，如 "GET"）；空串 = any，匹配所有方法
+    #[serde(default)]
+    pub method: String,
+    #[serde(default)]
+    pub enabled: bool,
+    /// 授权服务检查端点（HTTP/JSON，见 proxy/layer/authz.rs 的契约）
+    #[serde(default)]
+    pub url: String,
+    /// 授权检查超时（毫秒）
+    #[serde(default = "default_authz_timeout_ms")]
+    pub timeout_ms: u64,
+    /// 授权服务不可用时的处置（closed = 拒绝 / open = 放行）
+    #[serde(default)]
+    pub on_error: AuthzOnError,
+}
+
+fn default_authz_timeout_ms() -> u64 {
+    500
+}
+
+impl AuthzRule {
+    /// 该规则是否对指定 host + method 生效：已启用、有 URL、域名与方法均命中。
+    /// method 规则为空串 = any；比较大小写不敏感。
+    pub fn matches(&self, host: &str, method: &str) -> bool {
+        self.enabled
+            && !self.url.trim().is_empty()
+            && domain_match::domain_match(&self.domain, host)
+            && (self.method.is_empty() || self.method.eq_ignore_ascii_case(method))
+    }
+}
+
+/// extAuthz 授权配置
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct AuthzConfig {
+    /// 全局授权开关
+    #[serde(default)]
+    pub enabled: bool,
+    /// 规则列表，每项可单独开关
+    #[serde(default)]
+    pub rules: Vec<AuthzRule>,
 }
 
 /// AI 厂商标识。用于 URL 规则匹配和前端展示。
@@ -429,12 +508,15 @@ pub struct Settings {
     /// 代理配置
     #[serde(default)]
     pub proxy: ProxyConfig,
-    /// SSL 解密配置
-    #[serde(default)]
-    pub ssl: SslConfig,
+    /// TLS 解密配置
+    #[serde(default, alias = "ssl")]
+    pub tls: TlsConfig,
     /// 脚本配置
     #[serde(default)]
     pub script: ScriptConfig,
+    /// extAuthz 授权配置
+    #[serde(default)]
+    pub authz: AuthzConfig,
     /// 日志配置
     #[serde(default)]
     pub log: LogConfig,
@@ -459,8 +541,9 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             proxy: ProxyConfig::default(),
-            ssl: SslConfig::default(),
+            tls: TlsConfig::default(),
             script: ScriptConfig::default(),
+            authz: AuthzConfig::default(),
             log: LogConfig::default(),
             ui: UiConfig::default(),
             ai: AiConfig::default(),
@@ -529,22 +612,22 @@ fn ai_rule_host(url: &str) -> &str {
     url.split('/').next().unwrap_or("")
 }
 
-/// AI 检测依赖 MITM 解密：启用 AI 检测时联动 SSL 配置——打开总开关，
+/// AI 检测依赖 MITM 解密：启用 AI 检测时联动 TLS 配置——打开总开关，
 /// 并确保每条启用规则的域名被已启用的白名单项覆盖：
 /// 已有同名项则启用之；被已启用的通配项覆盖则跳过；否则追加新项。
 /// AI 检测未启用时不做任何改动。
-pub fn sync_ssl_for_ai(ssl: &mut SslConfig, ai: &AiConfig) {
+pub fn sync_tls_for_ai(tls: &mut TlsConfig, ai: &AiConfig) {
     if !ai.enabled {
         return;
     }
-    ssl.enabled = true;
+    tls.enabled = true;
     for rule in ai.detection.url_patterns.iter().filter(|r| r.enabled) {
         let host = ai_rule_host(rule.url.trim());
         if host.is_empty() {
             continue;
         }
         // 同名项（忽略大小写）→ 启用，不重复添加
-        if let Some(item) = ssl
+        if let Some(item) = tls
             .whitelist
             .iter_mut()
             .find(|w| w.domain.eq_ignore_ascii_case(host))
@@ -554,12 +637,12 @@ pub fn sync_ssl_for_ai(ssl: &mut SslConfig, ai: &AiConfig) {
         }
         // 具体域名已被启用的通配项覆盖 → 跳过（host 自带通配符时无法判定覆盖，直接追加）
         let covered = !host.contains(['*', '?'])
-            && ssl
+            && tls
                 .whitelist
                 .iter()
                 .any(|w| w.enabled && domain_match::domain_match(&w.domain, host));
         if !covered {
-            ssl.whitelist.push(SslWhitelistItem {
+            tls.whitelist.push(TlsWhitelistItem {
                 domain: host.to_string(),
                 enabled: true,
             });

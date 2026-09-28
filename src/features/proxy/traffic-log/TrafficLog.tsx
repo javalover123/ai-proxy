@@ -138,7 +138,7 @@ export default function TrafficLog({
         case "time":
           cmp = a.requestTimestamp - b.requestTimestamp;
           break;
-        case "ssl":
+        case "tls":
           cmp = (a.decrypted ? 1 : 0) - (b.decrypted ? 1 : 0);
           break;
         default:

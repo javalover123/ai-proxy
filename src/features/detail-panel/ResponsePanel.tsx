@@ -10,7 +10,7 @@ import { extractHost } from "@/lib/format";
 import { formatTrafficForAi } from "@/lib/format-for-ai";
 import { isStreamingContentType } from "@/lib/sse";
 import type { TrafficEntry } from "@/types/proxy";
-import type { SslConfig } from "@/types/settings";
+import type { TlsConfig } from "@/types/settings";
 import BodyView from "./components/BodyView";
 import KeyValueTable from "./components/KeyValueTable";
 import RawView from "./components/RawView";
@@ -43,16 +43,17 @@ function DecryptPrompt({ host, t }: { host: string; t: (key: string) => string }
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
 
-  const handleEnableSsl = useCallback(async () => {
+  const handleEnableTls = useCallback(async () => {
     setLoading(true);
     try {
-      const config: SslConfig = await invoke("get_ssl_config");
+      const config: TlsConfig = await invoke("get_tls_config");
       const exists = config.whitelist.some((item) => item.domain.toLowerCase() === host.toLowerCase());
-      const updated: SslConfig = {
+      const updated: TlsConfig = {
+        ...config,
         enabled: true,
         whitelist: exists ? config.whitelist : [...config.whitelist, { domain: host, enabled: true }],
       };
-      await invoke("save_ssl_config", { ssl: updated });
+      await invoke("save_tls_config", { tls: updated });
       setDone(true);
     } catch (_) {
       // 静默失败
@@ -74,7 +75,7 @@ function DecryptPrompt({ host, t }: { host: string; t: (key: string) => string }
     <div className="flex flex-col items-center justify-center h-full gap-2">
       <ShieldOffIcon className="size-8 text-muted-foreground/40" />
       <span className="text-muted-foreground text-center px-6">{t("detail.decryptPrompt")}</span>
-      <Button variant="secondary" size="sm" className="mt-1" onClick={handleEnableSsl} disabled={loading}>
+      <Button variant="secondary" size="sm" className="mt-1" onClick={handleEnableTls} disabled={loading}>
         {loading ? "..." : t("detail.decryptAction")}
       </Button>
     </div>

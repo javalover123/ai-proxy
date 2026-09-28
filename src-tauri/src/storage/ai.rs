@@ -158,6 +158,16 @@ pub(crate) struct AiSessionSummary {
     pub(crate) requests: Vec<AiRequestMeta>,
 }
 
+/// 期间用量汇总（`get_ai_usage_summary` 返回）：[start_ms, end_ms) 内的请求数与 token 用量。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct AiUsageSummary {
+    pub(crate) request_count: i64,
+    pub(crate) input_tokens: i64,
+    pub(crate) output_tokens: i64,
+    pub(crate) total_tokens: i64,
+}
+
 fn usage_dto(
     input: Option<i64>,
     output: Option<i64>,
@@ -263,6 +273,23 @@ impl Db {
             session_id: session_id.to_string(),
             request_id,
             fingerprint,
+            reply: reply_tx,
+        })?;
+        reply_rx.recv().map_err(|_| sqlite::Error {
+            code: None,
+            message: Some("db writer thread disconnected".into()),
+        })?
+    }
+
+    pub(crate) fn get_ai_usage_summary(
+        &self,
+        start_ms: i64,
+        end_ms: i64,
+    ) -> Result<AiUsageSummary, sqlite::Error> {
+        let (reply_tx, reply_rx) = mpsc::channel();
+        self.send(DbCmd::GetAiUsageSummary {
+            start_ms,
+            end_ms,
             reply: reply_tx,
         })?;
         reply_rx.recv().map_err(|_| sqlite::Error {
@@ -581,6 +608,40 @@ pub(crate) fn do_get_ai_thinking(
     Ok(out)
 }
 
+/// 汇总 [start_ms, end_ms) 区间内的请求数与 token 用量。
+/// `total_tokens` 为 NULL 的请求回退用 input + output 估算。
+pub(crate) fn do_get_ai_usage_summary(
+    conn: &sqlite::Connection,
+    start_ms: i64,
+    end_ms: i64,
+) -> Result<AiUsageSummary, sqlite::Error> {
+    let mut stmt = conn.prepare(
+        "SELECT COUNT(*),
+                COALESCE(SUM(input_tokens), 0),
+                COALESCE(SUM(output_tokens), 0),
+                COALESCE(SUM(COALESCE(total_tokens, COALESCE(input_tokens, 0) + COALESCE(output_tokens, 0))), 0)
+         FROM ai_requests
+         WHERE start_ms >= ? AND start_ms < ?",
+    )?;
+    stmt.bind((1_usize, start_ms))?;
+    stmt.bind((2_usize, end_ms))?;
+    if let sqlite::State::Row = stmt.next()? {
+        Ok(AiUsageSummary {
+            request_count: stmt.read::<i64, _>(0)?,
+            input_tokens: stmt.read::<i64, _>(1)?,
+            output_tokens: stmt.read::<i64, _>(2)?,
+            total_tokens: stmt.read::<i64, _>(3)?,
+        })
+    } else {
+        Ok(AiUsageSummary {
+            request_count: 0,
+            input_tokens: 0,
+            output_tokens: 0,
+            total_tokens: 0,
+        })
+    }
+}
+
 /// usage 是否全空（所有字段 None）；全空时不序列化 usage 字段，避免前端误判有值。
 fn usage_is_empty(u: &AiUsageDto) -> bool {
     u.input_tokens.is_none()
@@ -655,6 +716,9 @@ impl DbTable for AiTable {
         )?;
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_ai_requests_session ON ai_requests(session_id, id)",
+        )?;
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_ai_requests_start_ms ON ai_requests(start_ms)",
         )?;
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_ai_turns_session ON ai_turns(session_id, id)",

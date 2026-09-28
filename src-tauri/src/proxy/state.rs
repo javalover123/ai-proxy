@@ -117,6 +117,23 @@ impl State {
         self.read_settings.read().expect("settings lock")
     }
 
+    /// 匹配 host + method 的 extAuthz 规则（已启用、有 URL）。
+    /// 与 [`get_scripts_with`] 同构：从已有 `&Settings` 读取，避免重复加锁。
+    pub(crate) fn get_authz_rules_with(
+        &self,
+        settings: &crate::config::Settings,
+        host: &str,
+        method: &str,
+    ) -> Vec<crate::config::AuthzRule> {
+        settings
+            .authz
+            .rules
+            .iter()
+            .filter(|rule| rule.matches(host, method))
+            .cloned()
+            .collect()
+    }
+
     pub(crate) fn event_channel(&self) -> Option<Channel<ProxyEvent>> {
         self.event_channel
             .read()

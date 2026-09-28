@@ -7,14 +7,15 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AboutDialog } from "@/features/about";
 import { AiConfigDialog } from "@/features/ai-config";
 import { AiView } from "@/features/ai-view";
+import { AuthzConfigDialog } from "@/features/authz-config";
 import { BottomBar, type DetailPosition } from "@/features/bottom-bar";
 import { NewRequestView } from "@/features/new-request";
 import { EditRequestDialog, ProxyView } from "@/features/proxy";
 import { ScriptConfigDialog } from "@/features/script-config";
 import ScriptEditor from "@/features/script-config/ScriptEditor";
 import { SettingsDialog } from "@/features/settings";
-import { SslConfigDialog } from "@/features/ssl-config";
 import { TitleBar } from "@/features/title-bar";
+import { TlsConfigDialog } from "@/features/tls-config";
 import { ToolBar } from "@/features/tool-bar";
 import { useProseFontSize } from "@/hooks/useProseFontSize";
 import { useProxyEvents } from "@/hooks/useProxyEvents";
@@ -44,14 +45,15 @@ function App() {
   const [error, setError] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
-  const [sslConfigOpen, setSslConfigOpen] = useState(false);
+  const [tlsConfigOpen, setTlsConfigOpen] = useState(false);
   const [scriptConfigOpen, setScriptConfigOpen] = useState(false);
   const [aiConfigOpen, setAiConfigOpen] = useState(false);
+  const [authzConfigOpen, setAuthzConfigOpen] = useState(false);
   const [sendRequestOpen, setSendRequestOpen] = useState(false);
   const [showSidebar, setShowSidebar] = useState(true);
   const [detailPosition, setDetailPosition] = useState<DetailPosition>("bottom");
   const [scriptEnabled, setScriptEnabled] = useState(false);
-  const [sslEnabled, setSslEnabled] = useState(false);
+  const [tlsEnabled, setTlsEnabled] = useState(false);
   const [aiEnabled, setAiEnabled] = useState(false);
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [toolbarExpanded, setToolbarExpanded] = useState(false);
@@ -249,11 +251,11 @@ function App() {
   }, [entries]);
 
   // 挂载时读取一次初始状态：checkStatus 仅此一处使用，内联进 effect；
-  // loadScriptAndSslState 还会在设置弹窗关闭时复用，用 useCallback 稳定引用后列入依赖。
-  const loadScriptAndSslState = useCallback(async () => {
+  // loadScriptAndTlsState 还会在设置弹窗关闭时复用，用 useCallback 稳定引用后列入依赖。
+  const loadScriptAndTlsState = useCallback(async () => {
     try {
-      const settings = await invoke<{ ssl: { enabled: boolean }; script: { enabled: boolean } }>("get_settings");
-      setSslEnabled(settings.ssl.enabled);
+      const settings = await invoke<{ tls: { enabled: boolean }; script: { enabled: boolean } }>("get_settings");
+      setTlsEnabled(settings.tls.enabled);
       setScriptEnabled(settings.script.enabled);
     } catch (_) {}
     try {
@@ -276,8 +278,8 @@ function App() {
       } catch (_) {}
     }
     checkStatus();
-    loadScriptAndSslState();
-  }, [loadScriptAndSslState]);
+    loadScriptAndTlsState();
+  }, [loadScriptAndTlsState]);
 
   useEffect(() => {
     const unsubs: Array<() => void> = [];
@@ -308,12 +310,12 @@ function App() {
     } catch (_) {}
   }
 
-  async function toggleSsl() {
-    const next = !sslEnabled;
-    setSslEnabled(next);
+  async function toggleTls() {
+    const next = !tlsEnabled;
+    setTlsEnabled(next);
     try {
       // 只切总开关，域名白名单由后端原样保留
-      await invoke("set_ssl_enabled", { enabled: next });
+      await invoke("set_tls_enabled", { enabled: next });
     } catch (_) {}
   }
 
@@ -353,9 +355,10 @@ function App() {
         <TitleBar
           onOpenSettings={() => setSettingsOpen(true)}
           onOpenAbout={() => setAboutOpen(true)}
-          onOpenSslConfig={() => setSslConfigOpen(true)}
+          onOpenTlsConfig={() => setTlsConfigOpen(true)}
           onOpenScriptConfig={() => setScriptConfigOpen(true)}
           onOpenAiConfig={() => setAiConfigOpen(true)}
+          onOpenAuthzConfig={() => setAuthzConfigOpen(true)}
           running={running}
           onStartProxy={startProxy}
           onStopProxy={stopProxy}
@@ -404,6 +407,7 @@ function App() {
                   entries={entries}
                   showSidebar={showSidebar}
                   detailPosition={detailPosition}
+                  isActive={activeTabId === "new-request"}
                   importEditorTrigger={importEditorTrigger}
                 />
               </div>
@@ -476,14 +480,14 @@ function App() {
           onToggleDetailPosition={setDetailPosition}
           scriptEnabled={scriptEnabled}
           onToggleScript={toggleScript}
-          sslEnabled={sslEnabled}
-          onToggleSsl={toggleSsl}
+          tlsEnabled={tlsEnabled}
+          onToggleTls={toggleTls}
           aiEnabled={aiEnabled}
           onToggleAi={toggleAi}
         />
 
         <AboutDialog open={aboutOpen} onOpenChange={setAboutOpen} />
-        <SslConfigDialog open={sslConfigOpen} onOpenChange={setSslConfigOpen} />
+        <TlsConfigDialog open={tlsConfigOpen} onOpenChange={setTlsConfigOpen} />
         <ScriptConfigDialog
           open={scriptConfigOpen}
           onOpenChange={setScriptConfigOpen}
@@ -493,10 +497,11 @@ function App() {
           open={aiConfigOpen}
           onOpenChange={(open) => {
             setAiConfigOpen(open);
-            // 保存 AI 配置可能联动打开 SSL 解密，关闭弹窗后刷新底部栏开关状态
-            if (!open) loadScriptAndSslState();
+            // 保存 AI 配置可能联动打开 TLS 解密，关闭弹窗后刷新底部栏开关状态
+            if (!open) loadScriptAndTlsState();
           }}
         />
+        <AuthzConfigDialog open={authzConfigOpen} onOpenChange={setAuthzConfigOpen} />
         <EditRequestDialog open={sendRequestOpen} onOpenChange={setSendRequestOpen} entry={null} entries={entries} />
         <SettingsDialog
           open={settingsOpen}

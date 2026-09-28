@@ -23,12 +23,18 @@ export interface FormDataPart {
   partType: "text" | "file";
 }
 
+export type KeyValueType = "string" | "integer" | "bool" | "array" | "object" | "file";
+
 export interface KeyValuePair {
   key: string;
   value: string;
   /** Whether this entry is enabled for transmission (default true). Disabled entries are kept in
    *  the editor but excluded from send/save/curl export. */
   enabled?: boolean;
+  /** Value type hint (editor metadata only). Defaults to "string" when absent. */
+  type?: KeyValueType;
+  /** Free-form note/remark (editor metadata only). */
+  description?: string;
 }
 
 export interface ApiCollection {

@@ -9,7 +9,7 @@ import { useEffect, useRef, useState } from "react";
  *   防抖 300ms 重测，行级 ✓/✗ 实时刷新——针对某条规则「改到命中为止」的调试闭环
  * - 修改测试 URL 本身会解除驻留（结果失效），需重新点「测试」
  *
- * matchPath=false 仅按 host 匹配（SSL 白名单 / 脚本语义），
+ * matchPath=false 仅按 host 匹配（TLS 白名单 / 脚本语义），
  * true 按 host+path 匹配（AI 检测语义）。
  */
 export function useMatchTest(patterns: string[], matchPath: boolean) {

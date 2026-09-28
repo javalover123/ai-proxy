@@ -8,6 +8,7 @@ import {
   PlayIcon,
   SettingsIcon,
   ShieldCheckIcon,
+  ShieldOffIcon,
   SparklesIcon,
   SquareIcon,
   Trash2Icon,
@@ -25,9 +26,10 @@ import { TabBar } from "./TabBar";
 type TitleBarProps = {
   onOpenSettings: () => void;
   onOpenAbout: () => void;
-  onOpenSslConfig: () => void;
+  onOpenTlsConfig: () => void;
   onOpenScriptConfig: () => void;
   onOpenAiConfig: () => void;
+  onOpenAuthzConfig: () => void;
   running: boolean;
   onStartProxy: () => void;
   onStopProxy: () => void;
@@ -163,9 +165,10 @@ function WindowButton({
 export function TitleBar({
   onOpenSettings,
   onOpenAbout,
-  onOpenSslConfig,
+  onOpenTlsConfig,
   onOpenScriptConfig,
   onOpenAiConfig,
+  onOpenAuthzConfig,
   running,
   onStartProxy,
   onStopProxy,
@@ -282,11 +285,11 @@ export function TitleBar({
               <MenuItem
                 onClick={() => {
                   close();
-                  onOpenSslConfig();
+                  onOpenTlsConfig();
                 }}
               >
                 <ShieldCheckIcon className="size-4" />
-                {t("menu.sslConfig")}
+                {t("menu.tlsConfig")}
               </MenuItem>
               <MenuItem
                 onClick={() => {
@@ -296,6 +299,15 @@ export function TitleBar({
               >
                 <SparklesIcon className="size-4" />
                 {t("menu.aiConfig")}
+              </MenuItem>
+              <MenuItem
+                onClick={() => {
+                  close();
+                  onOpenAuthzConfig();
+                }}
+              >
+                <ShieldOffIcon className="size-4" />
+                {t("menu.authzConfig")}
               </MenuItem>
               <MenuItem
                 onClick={() => {

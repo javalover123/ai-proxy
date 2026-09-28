@@ -16,15 +16,17 @@ import {
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import type { DetailPosition } from "@/features/bottom-bar";
 import { useCollections } from "@/hooks/useCollections";
+import { useEnvironments } from "@/hooks/useEnvironments";
 import { useLocale } from "@/hooks/useLocale";
-import { buildSendBody } from "@/lib/body-utils";
+import { buildSendBody, parseFormDataBody, parseUrlEncoded } from "@/lib/body-utils";
 import type { CurlParsedResultOk } from "@/lib/curl";
+import { validateEntryType } from "@/lib/validate-entry";
+import { buildVariableMap, resolveTemplate } from "@/lib/variables";
 import type { ApiRequestNode, KeyValuePair } from "@/types/collection";
 import type { TrafficEntry } from "@/types/proxy";
 import { ApiCollectionPanel } from "./ApiCollectionPanel";
 import { CurlImportDialog } from "./CurlImportDialog";
 import RequestSendPanel from "./RequestSendPanel";
-import type { EnvItem } from "./RequestTabBar";
 import RequestTabBar from "./RequestTabBar";
 import { SaveToCollectionDialog } from "./SaveToCollectionDialog";
 import { useRequestTabs } from "./useRequestTabs";
@@ -34,6 +36,8 @@ interface NewRequestViewProps {
   entries: TrafficEntry[];
   showSidebar: boolean;
   detailPosition: DetailPosition;
+  /** 当前是否为激活视图（用于限定 Ctrl+S/Cmd+S 保存快捷键的生效范围） */
+  isActive: boolean;
   /** 从 AI 视图导入请求到编辑器（含 nonce 确保重复触发） */
   importEditorTrigger?: { entryId: number; nonce: number } | null;
 }
@@ -51,6 +55,7 @@ export function NewRequestView({
   entries,
   showSidebar,
   detailPosition,
+  isActive,
   importEditorTrigger,
 }: NewRequestViewProps) {
   const { t } = useLocale();
@@ -91,11 +96,8 @@ export function NewRequestView({
 
   // 新建节点（从树右键） → 立即创建并进入重命名
   const [renamingId, setRenamingId] = useState<number | null>(null);
-  const [envs, setEnvs] = useState<EnvItem[]>([
-    { id: "production", name: "", urlPrefix: "" },
-    { id: "test", name: "", urlPrefix: "" },
-  ]);
-  const [env, setEnv] = useState<string>("production");
+  const envController = useEnvironments();
+  const { globalVariables, activeEnv } = envController;
   const handleAddRequest = useCallback(
     (parentId: number) => {
       addRequest(parentId).then((newNodeId) => {
@@ -137,22 +139,53 @@ export function NewRequestView({
     if (activeTab.sending) return;
     if (!activeTab.url.trim()) return;
 
+    // ── 变量替换：构建映射（环境变量覆盖全局），对 URL/参数/请求头/Cookie/body 解析 {{var}} ──
+    const vars = buildVariableMap(globalVariables, activeEnv?.variables ?? []);
+    const resolve = (s: string) => resolveTemplate(s, vars);
+    const resolvedUrl = resolve(activeTab.url.trim());
+    const resolvedParams = activeTab.params.map((p) => ({ ...p, key: resolve(p.key), value: resolve(p.value) }));
+    const resolvedHeaders = activeTab.headers.map((p) => ({ ...p, key: resolve(p.key), value: resolve(p.value) }));
+    const resolvedCookies = activeTab.cookies.map((p) => ({ ...p, key: resolve(p.key), value: resolve(p.value) }));
+    const resolvedBody = resolve(activeTab.body);
+
+    // ── 前端校验：type 对应的值格式（HTTP 线上都是字符串，仅前端拦截） ──
+    const groups: { label: string; entries: KeyValuePair[] }[] = [
+      { label: t("requestEditor.params"), entries: resolvedParams },
+      { label: t("requestEditor.headers"), entries: resolvedHeaders },
+      { label: t("requestEditor.cookies"), entries: resolvedCookies },
+    ];
+    if (activeTab.bodyType === "urlencoded") {
+      groups.push({ label: t("requestEditor.body"), entries: parseUrlEncoded(resolvedBody) });
+    } else if (activeTab.bodyType === "multipart") {
+      groups.push({ label: t("requestEditor.body"), entries: parseFormDataBody(resolvedBody) });
+    }
+    for (const { label, entries } of groups) {
+      for (const e of entries) {
+        if (e.enabled === false || !e.key.trim()) continue;
+        const msgKey = validateEntryType(e.type, e.value);
+        if (msgKey) {
+          updateActiveTab({ error: `${label} "${e.key.trim()}" ${t(msgKey)}` }, activeTab.id);
+          return;
+        }
+      }
+    }
+
     const sendingTabId = activeTab.id;
 
     updateActiveTab({ sending: true, error: "" }, sendingTabId);
 
     const headerMap: Record<string, string> = {};
-    for (const { key, value, enabled } of activeTab.headers) {
+    for (const { key, value, enabled } of resolvedHeaders) {
       if (enabled !== false && key.trim()) headerMap[key.trim()] = value;
     }
 
-    const cookieStr = serializeCookies(activeTab.cookies);
+    const cookieStr = serializeCookies(resolvedCookies);
     if (cookieStr) {
       headerMap.Cookie = cookieStr;
     }
 
-    const filledParams = activeTab.params.filter((p) => p.enabled !== false && p.key.trim());
-    let finalUrl = activeTab.url.trim();
+    const filledParams = resolvedParams.filter((p) => p.enabled !== false && p.key.trim());
+    let finalUrl = resolvedUrl;
     if (filledParams.length > 0) {
       const sep = finalUrl.includes("?") ? "&" : "?";
       const qs = filledParams
@@ -170,7 +203,7 @@ export function NewRequestView({
         method: activeTab.method,
         url: finalUrl,
         headers: headerMap,
-        body: buildSendBody(activeTab.bodyType, activeTab.body),
+        body: buildSendBody(activeTab.bodyType, resolvedBody),
       });
       // Ignore result if cancelled
       if (cancelRef.current?.signal.aborted) return;
@@ -184,7 +217,7 @@ export function NewRequestView({
         cancelRef.current = null;
       }
     }
-  }, [activeTab, updateActiveTab, onSendSuccess]);
+  }, [activeTab, updateActiveTab, onSendSuccess, t, globalVariables, activeEnv]);
 
   // Save-to-collection dialog state (for unlinked tabs)
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
@@ -245,6 +278,39 @@ export function NewRequestView({
       setSaveDialogOpen(true);
     }
   }, [activeTab, updateRequest, markTabClean, loadCollections]);
+
+  // Ctrl+S / Cmd+S 保存、Enter 发送：订阅一次，通过 ref 读取最新 handleSave / handleSend 与 isActive，
+  // 避免 activeTab 每次变更都触发重新订阅；仅在视图激活时生效
+  const handleSaveRef = useRef(handleSave);
+  handleSaveRef.current = handleSave;
+  const handleSendRef = useRef(handleSend);
+  handleSendRef.current = handleSend;
+  const isActiveRef = useRef(isActive);
+  isActiveRef.current = isActive;
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (!isActiveRef.current) return;
+
+      // Ctrl+S / Cmd+S 保存
+      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+        e.preventDefault();
+        handleSaveRef.current();
+        return;
+      }
+
+      // Enter 发送：仅非编辑区生效（input/textarea/select/button/contenteditable 内不拦截，
+      // 保证 body/键值编辑器仍可换行；URL 栏的 Enter 由其自身 onKeyDown 处理）
+      if (e.key === "Enter" && !e.isComposing) {
+        const target = e.target as HTMLElement | null;
+        if (target?.closest("input, textarea, select, button, [contenteditable='true']")) return;
+        e.preventDefault();
+        handleSendRef.current();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   // Save-and-close from confirmation dialog
   const handleSaveAndClose = useCallback(() => {
@@ -526,10 +592,7 @@ export function NewRequestView({
               <RequestTabBar
                 tabs={tabs}
                 activeTabId={activeTab?.id ?? null}
-                env={env}
-                envs={envs}
-                onEnvChange={setEnv}
-                onEnvsChange={setEnvs}
+                envController={envController}
                 onActivate={activateTab}
                 onClose={handleRequestClose}
                 onNew={() => openTab()}

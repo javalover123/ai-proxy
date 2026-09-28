@@ -4,7 +4,7 @@ version      = "0.1.0"
 description  = "AI Proxy - Anthropic/OpenAI API MITM Proxy"
 authors      = ["lokistars"]
 edition      = "2024"
-rust-version = "1.96.0"
+rust-version = "1.97.0"
 
 [lib]
 name       = "ai_proxy_lib"

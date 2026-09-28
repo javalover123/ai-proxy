@@ -2,6 +2,7 @@ import { Combobox } from "@base-ui/react/combobox";
 import { Select as SelectPrimitive } from "@base-ui/react/select";
 import { ChevronDownIcon, PlusIcon, XIcon } from "lucide-react";
 import { useEffect, useState } from "react";
+import { HintIcon } from "@/components/core/HintIcon";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -93,13 +94,17 @@ export default function RuleEditForm({ initial, existingUrls, onConfirm, onCance
 
       <div className="flex-1 space-y-3 overflow-y-auto">
         {/* URL */}
-        <label className="grid gap-1.5">
-          <span className="text-xs font-medium text-muted-foreground">{t("aiConfig.fieldUrl")}</span>
+        <div className="grid gap-1.5">
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs font-medium text-muted-foreground">{t("aiConfig.fieldUrl")}</span>
+            <HintIcon label={t("aiConfig.urlHint")} />
+          </div>
           <Input
             autoFocus
             className="font-mono text-xs"
             value={url}
             placeholder={t("aiConfig.placeholderUrl")}
+            aria-label={t("aiConfig.fieldUrl")}
             onChange={(e) => {
               setUrl(e.target.value);
               setError("");
@@ -108,12 +113,8 @@ export default function RuleEditForm({ initial, existingUrls, onConfirm, onCance
               if (e.key === "Enter") handleConfirm();
             }}
           />
-          {error ? (
-            <span className="text-ui-sm text-destructive">{error}</span>
-          ) : (
-            <span className="text-ui-sm text-muted-foreground/75">{t("aiConfig.urlHint")}</span>
-          )}
-        </label>
+          {error && <span className="text-ui-sm text-destructive">{error}</span>}
+        </div>
 
         {/* Provider */}
         <label className="grid gap-1.5">
@@ -149,10 +150,10 @@ export default function RuleEditForm({ initial, existingUrls, onConfirm, onCance
         {/* Sources */}
         <div className="grid gap-1.5">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-muted-foreground">
-              {t("aiConfig.fieldSources")}
-              <span className="ml-1.5 font-normal opacity-70">{t("aiConfig.sourcesHint")}</span>
-            </span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-medium text-muted-foreground">{t("aiConfig.fieldSources")}</span>
+              <HintIcon label={t("aiConfig.sourcesHint")} />
+            </div>
             <Button variant="ghost" size="xs" onClick={addSource}>
               <PlusIcon className="size-3.5" />
               {t("aiConfig.addSource")}

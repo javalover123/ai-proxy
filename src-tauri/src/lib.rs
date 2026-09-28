@@ -10,13 +10,14 @@ use tauri::{Emitter, Manager, RunEvent};
 
 use crate::commands::{
     create_collection, create_folder, create_request, delete_node, duplicate_request,
-    export_ca_cert, get_ai_config, get_ai_session, get_ai_thinking, get_collections, get_locale,
-    get_prose_font_size, get_script_config, get_script_content, get_settings, get_ssl_config,
-    get_status, get_theme, get_traffic_detail, install_ca_cert, list_ai_sessions,
-    load_traffic_history, move_node, open_url, read_ca_cert_pem, rename_node, resend_request,
-    save_ai_config, save_request, save_script_config, save_script_content, save_settings,
-    save_ssl_config, set_ai_enabled, set_locale, set_prose_font_size, set_script_enabled,
-    set_ssl_enabled, set_theme, start_proxy, stop_proxy, subscribe_proxy_events, sync_tray_locale,
+    export_ca_cert, get_ai_config, get_ai_session, get_ai_thinking, get_ai_usage_summary,
+    get_authz_config, get_collections, get_env_store, get_locale, get_prose_font_size,
+    get_script_config, get_script_content, get_settings, get_status, get_theme, get_tls_config,
+    get_traffic_detail, install_ca_cert, list_ai_sessions, load_traffic_history, move_node,
+    open_url, read_ca_cert_pem, rename_node, resend_request, save_ai_config, save_authz_config,
+    save_env_store, save_request, save_script_config, save_script_content, save_settings,
+    save_tls_config, set_ai_enabled, set_locale, set_prose_font_size, set_script_enabled,
+    set_theme, set_tls_enabled, start_proxy, stop_proxy, subscribe_proxy_events, sync_tray_locale,
     test_rule_match,
 };
 use crate::config::{Settings, Store};
@@ -156,9 +157,9 @@ pub fn run() {
             read_ca_cert_pem,
             export_ca_cert,
             open_url,
-            get_ssl_config,
-            save_ssl_config,
-            set_ssl_enabled,
+            get_tls_config,
+            save_tls_config,
+            set_tls_enabled,
             get_ai_config,
             save_ai_config,
             set_ai_enabled,
@@ -168,6 +169,8 @@ pub fn run() {
             set_script_enabled,
             get_script_content,
             save_script_content,
+            get_authz_config,
+            save_authz_config,
             get_theme,
             set_theme,
             get_prose_font_size,
@@ -183,6 +186,7 @@ pub fn run() {
             list_ai_sessions,
             get_ai_session,
             get_ai_thinking,
+            get_ai_usage_summary,
             resend_request,
             get_collections,
             create_collection,
@@ -193,6 +197,8 @@ pub fn run() {
             move_node,
             save_request,
             duplicate_request,
+            get_env_store,
+            save_env_store,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

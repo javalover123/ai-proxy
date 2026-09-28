@@ -23,8 +23,8 @@ interface BottomBarProps {
   onToggleDetailPosition: (next: DetailPosition) => void;
   scriptEnabled: boolean;
   onToggleScript: () => void;
-  sslEnabled: boolean;
-  onToggleSsl: () => void;
+  tlsEnabled: boolean;
+  onToggleTls: () => void;
   aiEnabled: boolean;
   onToggleAi: () => void;
 }
@@ -36,8 +36,8 @@ export function BottomBar({
   onToggleDetailPosition,
   scriptEnabled,
   onToggleScript,
-  sslEnabled,
-  onToggleSsl,
+  tlsEnabled,
+  onToggleTls,
   aiEnabled,
   onToggleAi,
 }: BottomBarProps) {
@@ -106,18 +106,18 @@ export function BottomBar({
         <ScriptIcon className="size-4" />
       </button>
 
-      {/* Center-right: SSL toggle */}
+      {/* Center-right: TLS toggle */}
       <button
         type="button"
-        onClick={onToggleSsl}
+        onClick={onToggleTls}
         className={cn(
           "relative inline-flex h-[22px] w-[26px] items-center justify-center rounded-md transition-colors",
-          sslEnabled
+          tlsEnabled
             ? "bg-emerald-500/15 text-emerald-400"
             : "text-muted-foreground hover:bg-surface-elevated/50 hover:text-foreground",
         )}
       >
-        {sslEnabled && <span className="absolute bottom-0 left-1 right-1 h-[2px] rounded-full bg-emerald-400/70" />}
+        {tlsEnabled && <span className="absolute bottom-0 left-1 right-1 h-[2px] rounded-full bg-emerald-400/70" />}
         <ShieldMinusIcon className="size-4" />
       </button>
 

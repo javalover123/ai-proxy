@@ -1,18 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
 import { CheckIcon, PencilIcon, PlusIcon, Trash2Icon, XIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { HintIcon } from "@/components/core/HintIcon";
 import { MatchTestRow } from "@/components/match-test/MatchTestRow";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useLocale } from "@/hooks/useLocale";
@@ -166,9 +160,9 @@ export default function AiConfigDialog({ open, onOpenChange }: Props) {
         <DialogHeader>
           <div className="flex items-center gap-2.5">
             <DialogTitle>{t("aiConfig.title")}</DialogTitle>
+            <HintIcon label={t("aiConfig.description")} />
             <Switch checked={enabled} onCheckedChange={setEnabled} />
           </div>
-          <DialogDescription>{t("aiConfig.description")}</DialogDescription>
         </DialogHeader>
 
         {/* 包裹内容区 + error + footer：侧滑面板的定位锚 */}
