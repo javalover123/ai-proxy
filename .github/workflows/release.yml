@@ -281,7 +281,7 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           name: AI Proxy ${{ github.ref_name }}
-          prerelease: true
+          prerelease: false
           body: |
             ## AI Proxy ${{ github.ref_name }}
 
